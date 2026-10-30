@@ -61,8 +61,9 @@ export class AmountLink {
     await pc.setRemoteDescription({type:'offer',sdp:s.sdp});await pc.setLocalDescription(await pc.createAnswer());await this.gather(pc);
     return encodeSignal({v:1,kind:'answer',session:this.session,expires:this.expires,sdp:pc.localDescription.sdp});
   }
+  canAcceptAnswer(){return this.role==='sender'&&this.pc?.signalingState==='have-local-offer'&&Date.now()<this.expires;}
   async acceptAnswer(input){
-    if(!this.pc||this.role!=='sender')throw new Error('先にレジ側で接続用QRを作ってください。');
+    if(!this.canAcceptAnswer())throw new Error('接続の準備が失われたか、有効期限が切れました。新しいQRをお客さん端末で読み直してください。');
     const s=decodeSignal(input,'answer',this.session);await this.pc.setRemoteDescription({type:'answer',sdp:s.sdp});if(this.channel?.readyState!=='open')this.setState('connecting');
     this.connectTimer=setTimeout(()=>{if(!['connected','live'].includes(this.state))this.setState('disconnected');},20000);
   }

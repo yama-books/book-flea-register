@@ -30,7 +30,7 @@ export function decodeSignal(input,kind,expectedSession,now=Date.now()){
 export function validateSignal(s,kind,expectedSession,now=Date.now()){
   if(!s||s.v!==1||!['offer','answer'].includes(kind)||s.kind!==kind||! /^[a-f0-9]{32}$/.test(s.session)||typeof s.sdp!=='string'||s.sdp.length>16000||!s.sdp.startsWith('v=0\r\n')||!s.sdp.includes('m=application '))throw new Error('接続情報の種類が違います。正しいQRコードを読み取ってください。');
   if(!Number.isSafeInteger(s.expires)||s.expires<=now||s.expires>now+SIGNAL_LIFETIME+30000)throw new Error('接続用QRコードの有効期限が切れています。作り直してください。');
-  if(expectedSession&&s.session!==expectedSession)throw new Error('別の接続のQRコードです。いま表示している組み合わせで読み直してください。');
+  if(expectedSession&&s.session!==expectedSession)throw new Error('別の接続の返答QRです。お客さん端末でレジの新しいQRを読み直し、新しく出た返答QRをこの画面で読んでください。');
   return {v:1,kind:s.kind,session:s.session,expires:s.expires,sdp:s.sdp};
 }
 export function amountMessage(amountYen,sequence){

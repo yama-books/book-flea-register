@@ -11,12 +11,18 @@ document.querySelector('#run').onclick=async()=>{
     await ensureQR();
     sender=new AmountLink({role:'sender',iceServers:[],heartbeatMs:1000});receiver=new AmountLink({role:'receiver',iceServers:[],staleMs:250,onAmount:n=>amount=n,onState:s=>receiverState=s});
     let offer,answer;
+    await check('QR準備前の返答読取を拒否し、次の操作を案内',async()=>{assert(!sender.canAcceptAnswer(),'not ready');try{await sender.acceptAnswer('unused');throw new Error('accepted');}catch(e){assert(e.message.includes('新しいQR'),'recovery guidance');}});
     await check('接続用QRを実際に生成・読取し、offerを復元',async()=>{offer=await sender.createOffer();const url=new URL('../customer.html',location.href);url.hash='pair='+offer;decodeSignal(qrRoundTrip(url.href),'offer');});
     await check('返答QRを実際に生成・読取して接続',async()=>{answer=await receiver.acceptOffer(offer);await sender.acceptAnswer(qrRoundTrip(answer));await until(()=>sender.channel?.readyState==='open'&&receiver.channel?.readyState==='open');});
     await check('金額600円をWebRTCで即時受信',async()=>{sender.publish(600);await until(()=>amount===600);assert(receiverState==='live','live');});
     await check('連続追加後の更新と会計クリア0円を受信',async()=>{sender.publish(1000);await until(()=>amount===1000);sender.publish(0);await until(()=>amount===0);});
     await check('ハートビート途絶でstale状態になる',async()=>{await until(()=>receiverState==='stale');sender.publish(200);await until(()=>amount===200&&receiverState==='live');});
     await check('切断はdisconnectedまたはstaleとして検出',async()=>{sender.close();await until(()=>['disconnected','stale'].includes(receiverState));});
+    await check('切断後の古い返答は受け付けず、新QRの準備で再開',async()=>{
+      assert(!sender.canAcceptAnswer(),'closed');await sender.createOffer();assert(sender.canAcceptAnswer(),'new offer ready');
+      try{await sender.acceptAnswer(answer);throw new Error('old answer accepted');}catch(e){assert(e.message.includes('別の接続'),'session mismatch rejected');}
+      assert(sender.canAcceptAnswer(),'new offer remains usable');
+    });
   }catch(e){failures++;document.querySelector('#status').textContent=e.message;}
   finally{sender?.close();receiver?.close();document.querySelector('#status').textContent=failures?`FAIL ${failures}件`:`PASS リアルタイム表示 ${passed}件`;button.disabled=false;}
 };
