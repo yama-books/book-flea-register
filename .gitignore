@@ -10,3 +10,6 @@ Thumbs.db
 LOCAL_STATUS.md
 book-flea-register-handoff.zip
 .codex-local/
+
+# Private staff-call export includes the GAS endpoint and passcode
+*.local.*
