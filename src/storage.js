@@ -11,10 +11,17 @@ export function openStore(name = 'book-flea-register-v1') {
 }
 export function readState(db) {
   return new Promise((resolve,reject)=>{
-    let state;const tx=db.transaction('register','readonly');
-    tx.objectStore('register').get('state').onsuccess=e=>{state=migrateMarkers(e.target.result || initialState());};
-    tx.oncomplete=()=>{try{resolve(validateState(state));}catch(e){reject(e);}};
-    tx.onabort=()=>reject(tx.error || new Error('保存内容を読み込めません。'));
+    let state,failure;const tx=db.transaction('register','readwrite'),store=tx.objectStore('register');
+    store.get('state').onsuccess=e=>{
+      try{
+        const existing=e.target.result,raw=existing||initialState();state=migrateMarkers(raw);
+        if(state!==raw)state.revision=raw.revision+1;
+        validateState(state);
+        if(!existing||state!==raw)store.put(state,'state');
+      }catch(error){failure=error;tx.abort();}
+    };
+    tx.oncomplete=()=>resolve(state);
+    tx.onabort=()=>reject(failure || tx.error || new Error('保存内容を読み込めません。'));
   });
 }
 export function changeState(db,expectedRevision,mutate,{duplicateId} = {}) {
