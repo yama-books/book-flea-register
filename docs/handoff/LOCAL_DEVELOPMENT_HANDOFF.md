@@ -26,7 +26,7 @@ src/app.js: 会計/設定/練習切替/描画。src/calculation.js: 検証・会
 
 ## 変更時の検証と公開
 
-1. `node tests/run-checks.mjs`（構文＋Node45件×JST/UTC）。依存インストール不要。
+1. `node tests/run-checks.mjs`（構文＋Node46件×JST/UTC）。依存インストール不要。
 2. `tests/browser.html` 保存9件、`tests/realtime.html` 実QR/WebRTC9件。保存テストは専用DB。本番/実売上をテストに使わない。tests/layout.htmlで1024×768/768×1024/390幅を確認。
 3. 実テスト後、適用AGENTSとJev規則に従う。正本allowlist外のローカル資料は無断送信しない。ローカルaudit packはsend_allowed=falseで未送信、公開済みupstreamの差分と実CIログだけで監査してきた。verified/contradicted/unsupportedとreview confidenceを区別する。
 4. 公開はyama-booksだけ。CI Register checksとPages成功、GitHub読戻しと公開Pagesのハッシュ一致を確認。LOCAL_STATUS.mdに最新コミット/検証/限界を記録する。Factory owner/Secret/認証境界は変更しない。
@@ -46,3 +46,18 @@ vendor/sources.jsonの既存改行差分、entrance-counter/（参照のみ）�
 ## 次セッションへ渡す文
 
 > D:\dev\bookfreemarket（yama-books/book-flea-register）の最新mainを引き継いでください。まずdocs/handoff/LOCAL_DEVELOPMENT_HANDOFF.mdと指定順の資料、LOCAL_STATUS.mdを読んでください。上部の練習/山本呼出/設定、会計中心UI、内訳常時表示の売上3領域、白マークのグラフ色分け、可視時の1秒回転まで実装済みです。練習は別保存、顧客表示はQR/WebRTCとWake Lockです。PNGを維持し、不要な機能追加・確定履歴削除はしないでください。変更時はnode tests/run-checks.mjs、保存/通信ブラウザテストを実行し、公開後はCI/Pages/ファイル照合を行ってください。iPad実機とGAS実着信は未確認。vendor/sources.json、entrance-counter/、.claude/は変更しないでください。
+
+## 今回のローカル変更（グラフ調整）
+
+分類別は合計・点数を固定したドーナツ＋下段全幅凡例、時間帯別は各行の可視時に伸びる棒へ調整。動き低減を維持し、データ不変の再描画による回転の繰返しを防止。src/chart-motion.jsは複数要素の個別監視と解除後の通知抑止も担当する。構文＋Node46件×JST/UTCとChrome保存9件・実QR/WebRTC9件成功。1024/768/390幅ではみ出しなし。今回の変更はローカルのみ、公開・commit/push・iPad実機検収は未実施。Jevは2026-10-31に今回の4ファイルの差分とテスト結果のみ送信許可を取得。ただしJev MCPツールが当該ターンで利用できず未送信・監査未実施。詳細はdocs/VALIDATION.md。
+
+2026-10-31追記：お客さん画面は会計中の確認メッセージを削除し、待機は「いらっしゃいませ」、完了は「ありがとうございました！」。Jev接続復帰後、包括承認により5ファイル差分と実テスト結果で監査済み（TypeSafe、5 verified/0 contradicted/0 unsupported/0 review）。構文＋Node46件×JST/UTC exit 0。前述のJev未実施状態は解消。公開・commit/push・今回の文言の実機検収は未実施。
+
+2026-10-31追記：分類別グラフに項目名と割合を内側表示。実測したラベルが区画/輪/他ラベル/中央合計に収まらない時は下の一覧で欄外表示し淡色背景を付ける。src/sales-summary.jsのpieLabelsが配置判定、src/app.jsのplacePieLabelsが測定・リサイズ・解除を担当。構文＋Node48件×JST/UTC、Chrome保存9件・実QR/WebRTC9件成功。6等分/小区画と幅変更のUIを確認。TypeSafe監査5verified、contradicted/unsupported/review0。今回もローカルのみ、公開・実機検収は未実施。詳細と320幅のページ横超過はdocs/VALIDATION.md。
+
+## 2026-10-31 公開準備の最新仕様
+
+- グラフ内ラベルと欄外表示、動き/レイアウトの改善、お客さん画面の文言変更をまとめて公開する。
+- 接続済みのお客さん画面は完了後の「ありがとうございました！」だけを表示。待機中・会計中の通常メッセージは空欄。接続案内や通信エラーは別の状態表示として維持する。
+- 最新の自動チェックは構文＋Node48件×JST/UTC成功。保存9件・実QR/WebRTC9件も成功。Jev監査通過済み。過去の「45/46件」「Jev未実施」は当時の記録であり最新状態ではない。
+- iPad Safari実機は未検証。公開反映・CI/Pages・ハッシュ照合の最終結果はLOCAL_STATUS.mdで確認する。

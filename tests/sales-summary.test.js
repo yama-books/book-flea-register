@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {salesSummary,pieGradient} from '../src/sales-summary.js';
+import {salesSummary,pieGradient,pieLabels} from '../src/sales-summary.js';
 const receipt=(id,hour,items,date='2026-10-30')=>({id,businessDate:date,committedAt:new Date(2026,9,30,hour,15).toISOString(),items,totalYen:items.reduce((s,i)=>s+i.lineTotalYen,0),quantityTotal:items.reduce((s,i)=>s+i.quantity,0)});
 const item=(genreLabel,amount=100,quantity=1,colorHex='#e85c63')=>({genreLabel,lineTotalYen:amount,quantity,colorHex});
 test('白い値札の漫画・その他・CDはグラフだけ別の色にする',()=>{
@@ -26,4 +26,26 @@ test('空の記録・全件取消は空表示、23時台も24時までの1枠で
 test('円グラフの区間は売上比率で計算し、末尾を100%にそろえる',()=>{
   assert.equal(pieGradient([{amountYen:300,color:'#ffffff'},{amountYen:100,color:'#559bd5'}]),'conic-gradient(#ffffff 0% 75%,#559bd5 75% 100%)');
   assert.equal(pieGradient([]),'#e7e9e5');
+});
+test('ラベルは各区画に収まり、幅が狭くなると欄外へ移す',()=>{
+  const groups=Array.from({length:6},()=>({amountYen:100}));
+  const measured=groups.map(()=>({width:42,height:38}));
+  const wide=pieLabels(groups,measured,300),narrow=pieLabels(groups,measured,180);
+  assert.ok(wide.every(p=>p.inside&&p.percent==='16.7'));
+  assert.ok(narrow.every(p=>!p.inside));
+  wide.forEach((p,index)=>{
+    for(const [dx,dy] of [[-21,-19],[21,-19],[-21,19],[21,19]]){
+      const x=p.x+dx-150,y=p.y+dy-150,angle=(Math.atan2(x,-y)+2*Math.PI)%(2*Math.PI);
+      assert.ok(Math.hypot(x,y)>60&&Math.hypot(x,y)<150);
+      assert.ok(angle>=index*Math.PI/3&&angle<=(index+1)*Math.PI/3);
+    }
+  });
+});
+test('小区画・長い項目名は省略せず欄外とし、空や単一分類も扱う',()=>{
+  const labels=pieLabels([{amountYen:9900},{amountYen:100}],[{width:42,height:38},{width:30,height:38}],300);
+  assert.equal(labels[1].inside,false);assert.equal(labels[1].percent,'1.0');
+  assert.equal(pieLabels([{amountYen:100}],[{width:300,height:38}],300)[0].inside,false);
+  assert.equal(pieLabels([{amountYen:100}],[{width:42,height:38}],300)[0].inside,true);
+  assert.deepEqual(pieLabels([],[],300),[]);
+  assert.equal(pieLabels([{amountYen:0}],[{width:42,height:38}],300)[0].inside,false);
 });

@@ -4,8 +4,8 @@ import {setupCustomerControls} from './customer-controls.js';
 import {openPractice,draftKey,practiceBackup} from './practice.js';
 import {setupStaffCall} from './staff-call.js';
 import {setupFullscreen} from './menu.js';
-import {salesSummary,pieGradient} from './sales-summary.js';
-import {animatePie} from './chart-motion.js';
+import {salesSummary,pieGradient,pieLabels} from './sales-summary.js';
+import {animatePie,animateCharts} from './chart-motion.js';
 const $=s=>document.querySelector(s);
 const yen=n=>new Intl.NumberFormat('ja-JP').format(n)+'円';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -14,6 +14,7 @@ const blank=()=>({id:uid(),items:[],received:'',correctionOfId:null});
 const key=i=>JSON.stringify([i.priceId,i.unitPriceYen,i.colorId,i.genreId,i.genreLabel]);
 let db,liveDb,practiceDb,practice=false,state=initialState(),draft=blank(),busy=false,ready=false,editor,historyLimit=20,pendingConfirm,lastSale=null;
 let stopPieMotion=()=>{};
+let summarySignature='';
 const customerDisplay=setupCustomerControls();
 setupStaffCall({isPractice:()=>practice});setupFullscreen();
 function notify(message,error=false){$('#notice').textContent=(practice?'【練習】':'')+message;$('#notice').classList.toggle('error',error);}
@@ -86,19 +87,41 @@ function renderHistory(){
   renderSummary(date);
   $('#csv').disabled=busy||!ready;$('#backup').disabled=busy||!ready;
 }
+function placePieLabels(target,groups){
+  const wrap=target.querySelector('.pie-wrap'),labels=[...target.querySelectorAll('.pie-label')];
+  const rows=[...target.querySelectorAll('.legend-row')];
+  const update=()=>{
+    labels.forEach(label=>{label.hidden=false;label.style.visibility='hidden';});
+    const measured=labels.map(label=>({width:label.offsetWidth,height:label.offsetHeight}));
+    const positions=pieLabels(groups,measured,wrap.clientWidth);
+    positions.forEach((position,index)=>{
+      const label=labels[index];label.hidden=!position.inside;
+      rows[index].classList.toggle('is-outside',!position.inside);
+      if(position.inside){label.style.left=position.x+'px';label.style.top=position.y+'px';label.style.visibility='visible';}
+    });
+  };
+  update();
+  if(globalThis.ResizeObserver){const observer=new ResizeObserver(update);observer.observe(wrap);return ()=>observer.disconnect();}
+  window.addEventListener('resize',update);return ()=>window.removeEventListener('resize',update);
+}
 function renderSummary(date=localDate()){
-  stopPieMotion();stopPieMotion=()=>{};
   const data=salesSummary(state,date),target=$('#summaries');
+  const signature=JSON.stringify([practice,$('#summary-mode').value,data]);
+  if(signature===summarySignature)return;
+  summarySignature=signature;
+  stopPieMotion();stopPieMotion=()=>{};
   if(!data.totalYen){target.innerHTML='<p class="summary-empty">まだ記録はありません。会計を保存すると表示します。</p>';return;}
   if($('#summary-mode').value==='hourly'){
     const max=Math.max(...data.hours.map(h=>h.amountYen));
     target.innerHTML='<h4>時間帯別の売上（1時間ごと）</h4><p class="mini-note">会計を完了した時刻で集計します。</p><div class="hour-chart">'+data.hours.map(h=>`<div class="hour-row"><span>${String(h.hour).padStart(2,'0')}〜${String(h.hour+1).padStart(2,'0')}時</span><div class="hour-track" aria-hidden="true"><div style="width:${h.amountYen/max*100}%"></div></div><strong>${yen(h.amountYen)}</strong><small>${h.quantity}点 · ${h.receipts}会計</small></div>`).join('')+'</div>';
+    stopPieMotion=animateCharts(target.querySelectorAll('.hour-row'));
     return;
   }
   const description=data.categories.map(g=>`${g.name} ${yen(g.amountYen)}`).join('、');
-  target.innerHTML=`<h4>分類別の売上金額</h4><div class="category-chart"><div id="sales-pie" class="sales-pie" role="img" aria-label="${esc(description)}"></div><div class="chart-legend">${data.categories.map(g=>`<div class="legend-row"><span class="legend-dot" style="background:${g.color}" aria-hidden="true"></span><span>${esc(g.name)}<small>${g.quantity}点 · ${(g.amountYen/data.totalYen*100).toFixed(1)}%</small></span><strong>${yen(g.amountYen)}</strong></div>`).join('')}</div></div>`;
+  target.innerHTML=`<h4>分類別の売上金額</h4><div class="category-chart"><div class="pie-wrap"><div id="sales-pie" class="sales-pie" role="img" aria-label="${esc(description)}"></div><div class="pie-center" aria-hidden="true"><span>売上合計</span><strong>${yen(data.totalYen)}</strong><small>${data.categories.reduce((sum,g)=>sum+g.quantity,0)}点</small></div><div class="pie-labels" aria-hidden="true">${data.categories.map(g=>`<span class="pie-label"><span>${esc(g.name)}</span><strong>${(g.amountYen/data.totalYen*100).toFixed(1)}%</strong></span>`).join('')}</div></div><div class="chart-legend">${data.categories.map(g=>`<div class="legend-row"><span class="legend-dot" style="background:${g.color}" aria-hidden="true"></span><span>${esc(g.name)}<small>${g.quantity}点 · ${(g.amountYen/data.totalYen*100).toFixed(1)}%</small></span><strong>${yen(g.amountYen)}</strong></div>`).join('')}</div></div>`;
   $('#sales-pie').style.background=pieGradient(data.categories);
-  stopPieMotion=animatePie($('#sales-pie'));
+  const stopLabels=placePieLabels(target,data.categories),stopMotion=animatePie($('#sales-pie'));
+  stopPieMotion=()=>{stopLabels();stopMotion();};
 }
 $('#summary-mode').addEventListener('change',()=>renderSummary());
 function render(){

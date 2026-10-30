@@ -9,7 +9,7 @@ function showBill({amountYen,receivedYen,changeYen,done}){
   $('#customer-received').textContent=receivedYen===null?'—':yen(receivedYen);
   $('#customer-change').textContent=changeYen===null?'—':yen(changeYen);
   $('#customer-bill').classList.toggle('is-done',done);$('#customer-bill').hidden=false;
-  $('#customer-state').textContent=done?'ありがとうございました':amountYen?'お会計内容をご確認ください':'いらっしゃいませ';
+  $('#customer-state').textContent=done?'ありがとうございました！':'';
 }
 const link=new AmountLink({role:'receiver',onDiagnostic:text=>{$('#customer-diagnostic').textContent=text;},onAmount:showBill,onState:state=>{
   const live=state==='live';
