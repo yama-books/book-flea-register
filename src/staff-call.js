@@ -14,12 +14,13 @@ export function readCallSettings(storage){
   }
   return null;
 }
-export async function sendStaffCall(settings,text,{practice=false,fetcher=globalThis.fetch,timeoutMs=20000}={}){
+export async function sendStaffCall(settings,text,{staff='',practice=false,fetcher=globalThis.fetch,timeoutMs=20000}={}){
   text=String(text).trim();if(!text||text.length>500)throw new Error('要件を1〜500文字で入力してください。');
+  staff=String(staff).trim();if(!staff||staff.length>80)throw new Error('担当者名を1〜80文字で入力してください。');
   if(practice)return {demo:true};
   const config=validateCallSettings(settings),abort=new AbortController(),timer=setTimeout(()=>abort.abort(),timeoutMs);
   try{
-    const response=await fetcher(config.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:config.key,text,staff:'古本フリマレジ',source:'book-sale',at:new Date().toISOString()}),signal:abort.signal});
+    const response=await fetcher(config.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:config.key,text,staff,source:'book-sale',at:new Date().toISOString()}),signal:abort.signal});
     const result=await response.json();
     if(!response.ok||result?.ok!==true)throw new Error(typeof result?.error==='string'?result.error.slice(0,200):'送信の確認ができませんでした。');
     return {demo:false};
@@ -52,8 +53,8 @@ export function setupStaffCall({isPractice}){
     if(!practice&&!getSettings()){$('#call-status').textContent='合言葉が未設定です。「設定」→「メール通知」で保存してください。要件は残っています。';return;}
     sending=true;$('#call-submit').disabled=true;$('#close-call').disabled=true;$('#call-status').textContent=practice?'練習しています…':'送信中…';
     try{
-      await sendStaffCall(getSettings(),$('#call-input').value,{practice});
-      $('#call-input').value='';$('#call-status').textContent=practice?'呼出の練習ができました。メールは送っていません。':'送信しました。';
+      await sendStaffCall(getSettings(),$('#call-input').value,{staff:$('#call-staff').value,practice});
+      $('#call-input').value='';$('#call-staff').value='';$('#call-status').textContent=practice?'呼出の練習ができました。メールは送っていません。':'送信しました。';
     }catch(error){$('#call-status').textContent=(error.name==='AbortError'?'時間内に送信結果を確認できませんでした。':error.message)+' 要件は残っています。';}
     finally{sending=false;$('#call-submit').disabled=false;$('#close-call').disabled=false;}
   };
