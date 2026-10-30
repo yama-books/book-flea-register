@@ -1,0 +1,90 @@
+{
+  "source": "assets/reference/pixel-ui-model.png",
+  "size": [
+    1448,
+    1086
+  ],
+  "sha256": "ffb9cf91702a05dea966c61317fe83876b8b909dcb0945cc75bdaf877a507024",
+  "coordinates": "left, top, right-exclusive, bottom-exclusive; origin top-left",
+  "background": "original opaque background retained; not transparent",
+  "assets": [
+    {
+      "file": "assets/images/cat-red-book.png",
+      "box": [
+        80,
+        80,
+        183,
+        192
+      ],
+      "size": [
+        103,
+        112
+      ]
+    },
+    {
+      "file": "assets/images/cat-green-book.png",
+      "box": [
+        1037,
+        80,
+        1157,
+        191
+      ],
+      "size": [
+        120,
+        111
+      ]
+    },
+    {
+      "file": "assets/images/cat-reading-empty.png",
+      "box": [
+        1038,
+        323,
+        1140,
+        435
+      ],
+      "size": [
+        102,
+        112
+      ]
+    },
+    {
+      "file": "assets/images/cat-face.png",
+      "box": [
+        73,
+        1009,
+        111,
+        1043
+      ],
+      "size": [
+        38,
+        34
+      ]
+    },
+    {
+      "file": "assets/images/books-shelf.png",
+      "box": [
+        785,
+        108,
+        979,
+        193
+      ],
+      "size": [
+        194,
+        85
+      ]
+    },
+    {
+      "file": "assets/images/books-stack.png",
+      "box": [
+        1147,
+        116,
+        1226,
+        191
+      ],
+      "size": [
+        79,
+        75
+      ]
+    }
+  ]
+}

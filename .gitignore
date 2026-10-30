@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+backups/
+sales-data/
+.DS_Store
+Thumbs.db
+LOCAL_STATUS.md
+book-flea-register-handoff.zip
