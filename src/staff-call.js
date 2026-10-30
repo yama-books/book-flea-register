@@ -55,6 +55,7 @@ export function setupStaffCall({isPractice}){
       if(file.size>8192)throw new Error('設定ファイルが大きすぎます。');
       const config=parseCallConfigFile(await file.text());
       localStorage.setItem(ownKey,JSON.stringify(config));
+      localStorage.setItem(sharedKey,JSON.stringify(config));
       $('#call-url').value=config.url;$('#call-key').value=config.key;
       $('#call-settings').open=false;
       $('#call-status').textContent='共通送信設定をこの端末に取り込みました。';
