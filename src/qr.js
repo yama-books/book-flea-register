@@ -1,5 +1,12 @@
 import {extractToken} from './signaling.js';
 let libraries;
+export async function withCameraPermission(action,mediaDevices=globalThis.navigator?.mediaDevices){
+  if(!mediaDevices?.getUserMedia)throw new Error('カメラが使えません。Safariでこのページを開いてください。');
+  let stream;
+  try{stream=await mediaDevices.getUserMedia({video:true,audio:false});return await action();}
+  catch(e){if(e.name==='NotAllowedError')throw new Error('Safari用の接続準備にはカメラの許可が必要です。許可してから、もう一度このボタンを押してください。');throw e;}
+  finally{stream?.getTracks().forEach(track=>track.stop());}
+}
 export function ensureQR(){
   if(!libraries)libraries=(async()=>{
     for(const [file,name] of [['qrcode.js','qrcode'],['fflate.js','fflate'],['jsqr.js','jsQR']]){

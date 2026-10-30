@@ -3,10 +3,44 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
 import {AmountLink} from '../src/amount-link.js';
+import {withCameraPermission} from '../src/qr.js';
 import {encodeSignal,decodeSignal,extractToken,SIGNAL_LIFETIME,amountMessage,readAmount} from '../src/signaling.js';
 const context=vm.createContext({Uint8Array,Uint8ClampedArray,ArrayBuffer,DataView,TextEncoder,TextDecoder,console});context.self=context;context.window=context;
 for(const file of ['fflate.js','qrcode.js','jsqr.js'])vm.runInContext(fs.readFileSync(new URL('../vendor/'+file,import.meta.url),'utf8'),context);
 globalThis.fflate=context.fflate;
+test('20秒経過は接続待ちとし、60秒でも接続オブジェクトを閉じない',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const link=new AmountLink({role:'sender'}),pc={connectionState:'connecting'};link.pc=pc;link.setState('connecting');link.waitForConnection(pc);
+  t.mock.timers.tick(20000);assert.equal(link.state,'waiting');assert.equal(link.pc,pc);
+  t.mock.timers.tick(40000);assert.equal(link.state,'timeout');assert.equal(link.pc,pc);
+  link.setState('connected');assert.equal(link.state,'connected');
+});
+test('接続成立・終了・作り直し後に古い待機タイマーは表示を変えない',t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const link=new AmountLink({role:'sender'}),pc={};link.pc=pc;link.setState('connecting');link.waitForConnection(pc);link.setState('connected');
+  t.mock.timers.tick(60000);assert.equal(link.state,'connected');
+  link.setState('connecting');link.waitForConnection(pc);link.pc={};link.setState('pairing');t.mock.timers.tick(60000);assert.equal(link.state,'pairing');
+  link.pc=null;link.setState('idle');
+});
+test('Safari用のカメラは情報生成中だけ使い、成功・失敗の両方で停止する',async()=>{
+  let stopped=0,requested;
+  const media={getUserMedia:async options=>{requested=options;return {getTracks:()=>[{stop:()=>stopped++}]};}};
+  assert.equal(await withCameraPermission(async()=>{assert.equal(stopped,0);return 'qr';},media),'qr');
+  assert.deepEqual(requested,{video:true,audio:false});assert.equal(stopped,1);
+  await assert.rejects(withCameraPermission(async()=>{throw new Error('generation failed');},media),/generation failed/);assert.equal(stopped,2);
+  await assert.rejects(withCameraPermission(async()=>assert.fail('must not run'),{getUserMedia:async()=>{throw Object.assign(new Error('denied'),{name:'NotAllowedError'});}}),/カメラの許可が必要/);
+});
+test('一時的な途絶は復帰待ち、ブラウザのfailedは接続失敗として区別',t=>{
+  const previous=globalThis.RTCPeerConnection;
+  globalThis.RTCPeerConnection=class {constructor(){this.connectionState='new';this.iceConnectionState='new';}close(){this.connectionState='closed';}};
+  t.after(()=>{if(previous)globalThis.RTCPeerConnection=previous;else delete globalThis.RTCPeerConnection;});
+  let detail='';const link=new AmountLink({role:'sender',onDiagnostic:text=>detail=text}),pc=link.setup();
+  link.channel={readyState:'open',close(){}};
+  pc.connectionState='disconnected';pc.onconnectionstatechange();assert.equal(link.state,'reconnecting');
+  pc.connectionState='connected';pc.onconnectionstatechange();assert.equal(link.state,'connected');
+  pc.iceConnectionState='failed';pc.connectionState='failed';pc.onconnectionstatechange();assert.equal(link.state,'failed');assert.match(detail,/failed/);
+  link.close();
+});
 test('返答読取は現在の未回答offerと有効期限がそろう場合だけ許可',async()=>{
   const link=new AmountLink({role:'sender'});
   assert.equal(link.canAcceptAnswer(),false);

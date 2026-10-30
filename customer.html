@@ -10,9 +10,11 @@
       <video id="customer-video" playsinline muted hidden></video>
       <details><summary>接続リンク・コードを貼り付ける</summary><label for="customer-code">レジの接続リンク</label><textarea id="customer-code" rows="3" spellcheck="false" autocomplete="off"></textarea><button id="customer-use-code" class="quiet">このコードで接続</button></details>
       <div id="customer-answer" hidden><h2>このQRをレジで読み取ってください</h2><canvas id="customer-qr" aria-label="レジに返す接続用QRコード"></canvas><p>レジの「返答QRを読む」を押します。接続すると金額表示へ切り替わります。</p><button id="customer-save-qr" class="quiet">QR画像を保存</button><details><summary>返答コードをコピーする</summary><label for="customer-answer-code">レジに返す接続コード</label><textarea id="customer-answer-code" rows="3" readonly spellcheck="false"></textarea></details></div>
+      <details><summary>iPad / Safariでつながらないとき</summary><p class="mini-note">先にレジ側で「Safari用に接続を準備」を押し、新しいQRをこの端末で開いてください。下のボタンでカメラを許可し、新しく出た返答QRをレジで読みます。準備後にカメラは停止し、映像・音声は送信しません。</p><button id="customer-safari" class="quiet" disabled>Safari用に返答を準備（カメラ許可）</button></details>
       <p class="mini-note">接続用QRは10分間有効です。同じWi-Fiまたはテザリングを推奨します。端末の時計を自動設定にしてください。</p>
     </section>
     <button id="customer-reconnect" class="customer-reconnect quiet" hidden>接続し直す</button>
     <p id="customer-help" class="mini-note">接続には両端末でページを開いたままにしてください。</p>
+    <details><summary>接続状況（問い合わせ用）</summary><p id="customer-diagnostic" class="mini-note">未開始</p></details>
   </main><script type="module" src="src/customer.js"></script>
 </body></html>
