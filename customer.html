@@ -3,7 +3,11 @@
 <body class="customer-page">
   <main class="customer-screen">
     <p id="customer-state" class="customer-state" role="status">レジと接続してください</p>
-    <div class="customer-amount" aria-live="polite"><span id="customer-amount">—</span><span id="customer-yen" hidden>円</span></div>
+    <section id="customer-bill" class="customer-bill" aria-live="polite" hidden>
+      <div class="bill-row bill-total"><span>お会計</span><strong><span id="customer-amount">0</span><small>円</small></strong></div>
+      <div class="bill-row"><span>お預かり</span><strong id="customer-received">—</strong></div>
+      <div class="bill-row bill-change"><span>お釣り</span><strong id="customer-change">—</strong></div>
+    </section>
     <section id="customer-pairing" class="customer-pairing">
       <p>レジの「お客さん表示」で作ったQRを、この端末のカメラで読み取ってください。</p>
       <div class="pair-buttons"><button id="customer-camera" class="primary">レジのQRを読む</button><button id="customer-image-button" class="quiet">QR画像を選ぶ</button></div><input type="file" id="customer-image" accept="image/*" hidden>
@@ -12,9 +16,10 @@
       <div id="customer-answer" hidden><h2>このQRをレジで読み取ってください</h2><canvas id="customer-qr" aria-label="レジに返す接続用QRコード"></canvas><p>レジの「返答QRを読む」を押します。接続すると金額表示へ切り替わります。</p><button id="customer-save-qr" class="quiet">QR画像を保存</button><details><summary>返答コードをコピーする</summary><label for="customer-answer-code">レジに返す接続コード</label><textarea id="customer-answer-code" rows="3" readonly spellcheck="false"></textarea></details></div>
       <details><summary>iPad / Safariでつながらないとき</summary><p class="mini-note">先にレジ側で「Safari用に接続を準備」を押し、新しいQRをこの端末で開いてください。下のボタンでカメラを許可し、新しく出た返答QRをレジで読みます。準備後にカメラは停止し、映像・音声は送信しません。</p><button id="customer-safari" class="quiet" disabled>Safari用に返答を準備（カメラ許可）</button></details>
       <p class="mini-note">接続用QRは10分間有効です。同じWi-Fiまたはテザリングを推奨します。端末の時計を自動設定にしてください。</p>
+      <p id="customer-awake" class="mini-note"></p>
     </section>
     <button id="customer-reconnect" class="customer-reconnect quiet" hidden>接続し直す</button>
     <p id="customer-help" class="mini-note">接続には両端末でページを開いたままにしてください。</p>
-    <details><summary>接続状況（問い合わせ用）</summary><p id="customer-diagnostic" class="mini-note">未開始</p></details>
+    <details id="customer-diagnostic-box" hidden><summary>接続状況（問い合わせ用）</summary><p id="customer-diagnostic" class="mini-note">未開始</p><p id="customer-awake-detail" class="mini-note"></p></details>
   </main><script type="module" src="src/customer.js"></script>
 </body></html>

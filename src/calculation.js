@@ -1,7 +1,10 @@
 export const MAX_MONEY = 99_999_999;
 export const MAX_QUANTITY = 999;
-export const COLORS = [['red','赤','#e85c63'],['yellow','黄','#f2c94c'],['green','緑','#47a785'],['white','白','#ffffff'],['blue','青','#559bd5'],['so','そ','#ffffff']];
-export const GENRES = ['文庫','新書','漫画','その他書籍','専門書','CD'];
+export const COLORS = [['red','赤','#e85c63'],['yellow','黄','#f2c94c'],['green','緑','#47a785'],['white','白','#ffffff'],['blue','青','#559bd5'],['so','そ','#ffffff'],['cd','CD','#ffffff']];
+// 初期の分類名。設定で変更でき、レジ画面には表示しない。
+export const DEFAULT_CATEGORIES = {red:'文庫',yellow:'新書',green:'単行本',white:'漫画',blue:'',so:'その他',cd:'CD'};
+export const MARKER_VERSION = 3;
+export const MAX_CATEGORY = 20;
 export const copy = value => JSON.parse(JSON.stringify(value));
 export function integer(value, min = 0, max = MAX_MONEY) {
   if (!Number.isSafeInteger(value) || value < min || value > max) throw new Error('金額・数量は範囲内の整数で入力してください。');
@@ -13,19 +16,27 @@ export function parseMoney(text) {
 }
 export function initialState() {
   return {schemaVersion:1, revision:0, nextReceiptNo:1,
-    settings:{markerVersion:2, initialized:true, prices:[100,200,400].map(n=>({id:`p${n}`,amountYen:n})), colors:COLORS.map(([id,label,hex])=>({id,label,hex,priceId:'p100'})), genres:GENRES.map((label,i)=>({id:`g${i}`,label}))}, receipts:[], voids:[]};
+    settings:{markerVersion:MARKER_VERSION, initialized:true, prices:[100,200,400].map(n=>({id:`p${n}`,amountYen:n})), colors:COLORS.map(([id,label,hex])=>({id,label,hex,priceId:'p100',category:DEFAULT_CATEGORIES[id]}))}, receipts:[], voids:[]};
 }
 export function migrateMarkers(state) {
   const colors=state?.settings?.colors;
-  if(state?.schemaVersion===1 && Array.isArray(colors) && state.settings.markerVersion!==2){
+  if(state?.schemaVersion!==1 || !Array.isArray(colors) || state.settings.markerVersion===MARKER_VERSION) return state;
+  if(state.settings.markerVersion!==2){
     const legacy=copy(state.settings);
     legacy.colors=legacy.colors.map(c=>c.id==='pink'?{...c,id:'so',label:'そ',hex:'#ffffff'}:c);
-    validateSettings(legacy,!legacy.initialized);
+    if(!Array.isArray(legacy.colors) || legacy.colors.length!==6) throw new Error('6色の対応を設定してください。');
     state=copy(state);
     state.settings=initialState().settings;
+    return state;
   }
+  // markerVersion 2: 価格の対応を保ったまま、CDマークと分類名を追加する。
+  state=copy(state);
+  const settings=state.settings,fallback=settings.prices.some(p=>p.id==='p100')?'p100':settings.prices[0]?.id??'';
+  settings.colors=COLORS.map(([id,label,hex])=>{const old=settings.colors.find(c=>c.id===id);return {id,label,hex,priceId:old?old.priceId:fallback,category:DEFAULT_CATEGORIES[id]};});
+  delete settings.genres;settings.markerVersion=MARKER_VERSION;
   return state;
 }
+export function categoryOf(color) { return color?.category?.trim() || '未分類'; }
 export function localDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 }
@@ -40,13 +51,13 @@ export function validateSettings(settings, allowUnset = false) {
   if (!settings || typeof settings.initialized !== 'boolean' || !Array.isArray(settings.prices) || settings.prices.length < 1 || settings.prices.length > 30) throw new Error('価格は1〜30種類で設定してください。');
   for (const price of settings.prices) { text(price.id); integer(price.amountYen,1,1_000_000); }
   unique(settings.prices,'id'); unique(settings.prices,'amountYen');
-  if (!Array.isArray(settings.colors) || settings.colors.length !== 6) throw new Error('6色の対応を設定してください。');
+  if (!Array.isArray(settings.colors) || settings.colors.length !== COLORS.length) throw new Error(`${COLORS.length}種類のマークの対応を設定してください。`);
   for (const [id,label,hex] of COLORS) {
     const c=settings.colors.find(x=>x.id===id);
-    if (!c || c.label!==label || c.hex!==hex || (!settings.prices.some(p=>p.id===c.priceId) && !(allowUnset && c.priceId===''))) throw new Error('すべての色に価格を割り当ててください。');
+    if (!c || c.label!==label || c.hex!==hex || (!settings.prices.some(p=>p.id===c.priceId) && !(allowUnset && c.priceId===''))) throw new Error('すべてのマークに価格を割り当ててください。');
+    if (typeof c.category!=='string' || c.category.length>MAX_CATEGORY || /[\u0000-\u001f]/.test(c.category)) throw new Error(`分類名は${MAX_CATEGORY}文字以内で入力してください。`);
   }
   unique(settings.colors,'id');
-  if (!Array.isArray(settings.genres) || settings.genres.length!==6 || settings.genres.some((g,i)=>g.id!==`g${i}` || g.label!==GENRES[i])) throw new Error('分類設定が不正です。');
   return settings;
 }
 export function totals(items) {

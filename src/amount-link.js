@@ -3,7 +3,7 @@ const ICE_SERVERS=[{urls:'stun:stun.l.google.com:19302'}];
 export class AmountLink {
   constructor({role,onState=()=>{},onAmount=()=>{},onDiagnostic=()=>{},iceServers=ICE_SERVERS,heartbeatMs=1000,staleMs=STALE_AFTER}={}){
     if(!['sender','receiver'].includes(role))throw new Error('接続の役割が不正です。');
-    Object.assign(this,{role,onState,onAmount,onDiagnostic,iceServers,heartbeatMs,staleMs,latest:0,sequence:0,lastSequence:0,lastSeen:0,pc:null,channel:null,state:'idle'});
+    Object.assign(this,{role,onState,onAmount,onDiagnostic,iceServers,heartbeatMs,staleMs,latest:{amountYen:0},sequence:0,lastSequence:0,lastSeen:0,pc:null,channel:null,state:'idle'});
   }
   diagnostic(){return `接続: ${this.pc?.connectionState||'未開始'} / 通信確認: ${this.pc?.iceConnectionState||'未開始'} / 金額用の通信: ${this.channel?.readyState||'未開始'}`;}
   setState(state){
@@ -39,7 +39,7 @@ export class AmountLink {
         if(e.data==='{"v":1,"type":"hello"}')this.sendLatest();return;
       }
       const data=readAmount(e.data,this.lastSequence);if(!data)return;
-      this.lastSequence=data.sequence;this.lastSeen=Date.now();this.setState('live');this.onAmount(data.amountYen);
+      this.lastSequence=data.sequence;this.lastSeen=Date.now();this.setState('live');this.onAmount(data);
     };
     channel.onclose=()=>{if(this.channel===channel){clearInterval(this.timer);this.setState('disconnected');}};
     channel.onerror=()=>{if(this.channel===channel)this.setState('failed');};
@@ -86,9 +86,9 @@ export class AmountLink {
       if(this.state==='connecting')this.waitForConnection(pc);
     }
   }
-  publish(amountYen){amountMessage(amountYen,1);this.latest=amountYen;this.sendLatest();}
+  publish(display){const {amountYen,...rest}=display;amountMessage(amountYen,1,rest);this.latest={...display};this.sendLatest();}
   sendLatest(){if(this.role==='sender'&&this.channel?.readyState==='open'){
-    try{this.channel.send(JSON.stringify(amountMessage(this.latest,++this.sequence)));}catch{this.setState('reconnecting');}
+    try{const {amountYen,...rest}=this.latest;this.channel.send(JSON.stringify(amountMessage(amountYen,++this.sequence,rest)));}catch{this.setState('reconnecting');}
   }}
   close(){
     clearInterval(this.timer);clearTimeout(this.connectTimer);clearTimeout(this.waitTimer);

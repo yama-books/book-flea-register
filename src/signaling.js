@@ -33,11 +33,19 @@ export function validateSignal(s,kind,expectedSession,now=Date.now()){
   if(expectedSession&&s.session!==expectedSession)throw new Error('別の接続の返答QRです。お客さん端末でレジの新しいQRを読み直し、新しく出た返答QRをこの画面で読んでください。');
   return {v:1,kind:s.kind,session:s.session,expires:s.expires,sdp:s.sdp};
 }
-export function amountMessage(amountYen,sequence){
-  if(!Number.isSafeInteger(amountYen)||amountYen<0||amountYen>99999999||!Number.isSafeInteger(sequence)||sequence<1)throw new Error('表示金額が不正です。');
-  return {v:1,type:'amount',amountYen,sequence};
+const money=n=>Number.isSafeInteger(n)&&n>=0&&n<=99999999;
+// お客さん画面へ送るのは会計中の金額だけ。明細・売上履歴は送らない。
+export function amountMessage(amountYen,sequence,{receivedYen=null,changeYen=null,done=false}={}){
+  if(!money(amountYen)||!Number.isSafeInteger(sequence)||sequence<1)throw new Error('表示金額が不正です。');
+  if((receivedYen!==null&&!money(receivedYen))||(changeYen!==null&&(!money(changeYen)||receivedYen===null||receivedYen-amountYen!==changeYen))||typeof done!=='boolean'||(done&&changeYen===null))throw new Error('表示金額が不正です。');
+  return {v:1,type:'amount',amountYen,receivedYen,changeYen,done,sequence};
 }
 export function readAmount(raw,lastSequence=0){
-  if(typeof raw!=='string'||raw.length>200)return null;
-  try{const data=JSON.parse(raw);amountMessage(data.amountYen,data.sequence);if(data.v!==1||data.type!=='amount'||data.sequence<=lastSequence)return null;return {amountYen:data.amountYen,sequence:data.sequence};}catch{return null;}
+  if(typeof raw!=='string'||raw.length>300)return null;
+  try{
+    const data=JSON.parse(raw);if(data.v!==1||data.type!=='amount')return null;
+    const message=amountMessage(data.amountYen,data.sequence,{receivedYen:data.receivedYen??null,changeYen:data.changeYen??null,done:data.done??false});
+    if(message.sequence<=lastSequence)return null;
+    const {amountYen,receivedYen,changeYen,done,sequence}=message;return {amountYen,receivedYen,changeYen,done,sequence};
+  }catch{return null;}
 }
