@@ -16,17 +16,17 @@ function selectedItem(){
   return {priceId:p.id,unitPriceYen:p.amountYen,colorId:c.id,colorLabel:c.label,colorHex:c.hex,genreId:g?.id??null,genreLabel:g?.label??'未分類',quantity:1,lineTotalYen:p.amountYen};
 }
 function renderColors(){
-  $('#colors').innerHTML=state.settings.colors.map(c=>{const p=state.settings.prices.find(p=>p.id===c.priceId);return `<button class="color-choice" data-color="${esc(c.id)}" aria-label="${esc(c.label)} ${p?yen(p.amountYen):'価格未設定'}" aria-pressed="${c.id===colorId}" ${!ready||busy?'disabled':''}><span class="swatch" style="background:${c.hex}"></span><span class="color-name">${c.label}</span><span class="color-price">${p?yen(p.amountYen):'未設定'}</span></button>`;}).join('');
+  $('#colors').innerHTML=state.settings.colors.map(c=>{const p=state.settings.prices.find(p=>p.id===c.priceId);return `<button class="color-choice${c.id===colorId?' is-current':''}" data-color="${esc(c.id)}" aria-label="${esc(c.label)} ${p?yen(p.amountYen)+'の本を1冊追加':'価格未設定'}" ${!ready||busy||!p?'disabled':''}><span class="swatch" style="background:${c.hex}"></span><span class="color-name">${c.label}</span><span class="color-price">${p?yen(p.amountYen):'未設定'}</span></button>`;}).join('');
   $('#genres').innerHTML=[{id:'',label:'未分類'},...state.settings.genres].map(g=>`<button data-genre="${g.id}" aria-pressed="${g.id===(genreId??'')}" ${busy?'disabled':''}>${g.label}</button>`).join('');
   $('#selected-genre').textContent=state.settings.genres.find(g=>g.id===genreId)?.label??'未分類';
 }
 function renderCart(){
   let t;try{t=totals(draft.items);}catch(e){notify(e.message,true);return;}
   $('#total').innerHTML=`${new Intl.NumberFormat('ja-JP').format(t.totalYen)}<span>円</span>`;$('#count').textContent=t.quantityTotal;
-  $('#draft-label').textContent=draft.correctionOfId?'履歴を残して、この会計を訂正中':'色を選んで冊数を追加';
+  $('#draft-label').textContent=draft.correctionOfId?'履歴を残して、この会計を訂正中':'色をタップして1冊追加';
   const item=selectedItem(),qty=item?draft.items.find(i=>key(i)===key(item))?.quantity??0:0;
   $('#quantity-picker').innerHTML=`<div class="quantity-label">${item?`${yen(item.unitPriceYen)}の本 × ${qty}冊`:'最初に色と価格を設定'}<small>${item?`${esc(item.colorLabel)} · ${esc(item.genreLabel)}`:'設定から6色の価格を選べます'}</small></div><div class="stepper"><button data-step="-1" aria-label="選択した本を1冊減らす" ${!item||!qty||busy||!ready?'disabled':''}>−</button><strong>${qty}</strong><button data-step="1" aria-label="選択した本を1冊増やす" ${!item||busy||!ready||qty>=MAX_QUANTITY?'disabled':''}>＋</button></div>`;
-  $('#cart').innerHTML=draft.items.length?draft.items.map((i,n)=>`<div class="cart-row"><div class="cart-description"><span class="swatch" style="background:${esc(i.colorHex)}"></span>${esc(i.colorLabel)} · ${yen(i.unitPriceYen)} × ${i.quantity}冊<small>${esc(i.genreLabel)} · ${yen(i.lineTotalYen)}</small></div><div class="cart-stepper"><button data-row="${n}" data-delta="-1" aria-label="明細${n+1}を1冊減らす" ${busy?'disabled':''}>−</button><button data-row="${n}" data-delta="1" aria-label="明細${n+1}を1冊増やす" ${busy||i.quantity>=MAX_QUANTITY?'disabled':''}>＋</button></div></div>`).join(''):'<p class="cart-empty">値札の色を選び、＋で冊数を増やしてください。</p>';
+  $('#cart').innerHTML=draft.items.length?draft.items.map((i,n)=>`<div class="cart-row"><div class="cart-description"><span class="swatch" style="background:${esc(i.colorHex)}"></span>${esc(i.colorLabel)} · ${yen(i.unitPriceYen)} × ${i.quantity}冊<small>${esc(i.genreLabel)} · ${yen(i.lineTotalYen)}</small></div><div class="cart-stepper"><button data-row="${n}" data-delta="-1" aria-label="明細${n+1}を1冊減らす" ${busy?'disabled':''}>−</button><button data-row="${n}" data-delta="1" aria-label="明細${n+1}を1冊増やす" ${busy||i.quantity>=MAX_QUANTITY?'disabled':''}>＋</button></div></div>`).join(''):'<p class="cart-empty">値札の色をタップすると、1冊追加されます。</p>';
   const counts=new Map();for(const i of draft.items)counts.set(i.unitPriceYen,(counts.get(i.unitPriceYen)??0)+i.quantity);
   $('#price-summary').textContent=[...counts].sort((a,b)=>a[0]-b[0]).map(([p,q])=>`${yen(p)} × ${q}冊`).join('　/　');
   $('#received').value=draft.received;$('#received').disabled=busy||!ready;
@@ -110,7 +110,7 @@ async function submitSettings(e){
   try{
     const settings=copy(editor);settings.initialized=true;validateSettings(settings);
     busy=true;$('#settings-form button[type=submit]').disabled=true;
-    state=await changeState(db,state.revision,s=>{s.settings=settings;return s;});$('#settings-dialog').close();notify('設定を保存しました。色を選んでお会計をはじめましょう。');broadcast();
+    state=await changeState(db,state.revision,s=>{s.settings=settings;return s;});$('#settings-dialog').close();notify('設定を保存しました。色をタップしてお会計をはじめましょう。');broadcast();
   }catch(error){$('#settings-error').textContent=error.message;try{state=await readState(db);}catch{}}
   finally{busy=false;$('#settings-form button[type=submit]').disabled=false;render();}
 }
@@ -119,7 +119,7 @@ try{channel=new BroadcastChannel('book-flea-register');channel.onmessage=()=>{if
 function broadcast(){try{channel?.postMessage('updated');}catch{}}
 document.addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||b.disabled)return;
-  if(b.dataset.color){colorId=b.dataset.color;renderColors();renderCart();}
+  if(b.dataset.color){colorId=b.dataset.color;step(1);renderColors();renderCart();}
   if('genre' in b.dataset){genreId=b.dataset.genre||null;renderColors();renderCart();}
   if('step' in b.dataset)step(Number(b.dataset.step));
   if('row' in b.dataset)step(Number(b.dataset.delta),Number(b.dataset.row));
@@ -174,7 +174,7 @@ window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnV
 async function init(){
   render();try{db=await openStore();state=await readState(db);recoverDraft();
     if(state.receipts.some(r=>r.id===draft.id)){draft=blank();persistDraft();}
-    ready=true;render();notify(draft.items.length?'途中のお会計を復元しました。内容をご確認ください。':'色を選んで、＋で冊数を追加してください。');
+    ready=true;render();notify(draft.items.length?'途中のお会計を復元しました。内容をご確認ください。':state.settings.initialized?'色をタップすると、1冊追加されます。':'最初に「設定」で、色と価格を対応させてください。');
     if(!state.settings.initialized)openSettings();
   }catch(e){notify(e.message,true);render();}
 }

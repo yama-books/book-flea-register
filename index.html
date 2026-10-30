@@ -12,17 +12,17 @@
 <body>
   <div class="app-shell">
     <header class="app-header">
-      <div class="brand"><img src="assets/images/cat-red-book.png" alt="" width="54" height="59"><div><p class="eyebrow">BOOK FLEA MARKET</p><h1>古本フリマレジ</h1><p class="tagline">本をえらんで、かんたんお会計。</p></div></div>
+      <img class="header-cat" src="assets/images/cat-red-book.png" alt="" width="40" height="44">
       <button id="open-settings" class="quiet">設定</button>
     </header>
     <p id="notice" class="notice" role="status" aria-live="polite">保存内容を読み込んでいます…</p>
     <main>
       <section class="panel checkout" aria-labelledby="checkout-title">
-        <div class="panel-heading green"><h2 id="checkout-title">いまのお会計</h2><span id="draft-label">色を選んで冊数を追加</span></div>
+        <div class="panel-heading green"><h2 id="checkout-title">いまのお会計</h2><span id="draft-label">色をタップして1冊追加</span></div>
         <div class="panel-body">
           <div class="total-card"><div><span class="small-label">お会計の合計</span><p class="big-total" id="total">0<span>円</span></p></div><div class="count"><strong id="count">0</strong> 冊<span>CDも含みます</span></div></div>
           <div class="book-entry">
-          <div class="section-caption"><h3>1 <span>色をえらぶ</span></h3><span class="muted">値札の色をタップ</span></div>
+          <div class="section-caption"><h3>1 <span>色をタップ</span></h3><span class="muted">1タップで1冊</span></div>
           <div id="colors" class="color-grid" aria-label="本の色"></div>
           <details class="genre-details"><summary>分類を付ける <span class="muted">任意</span><span id="selected-genre">未分類</span></summary><div id="genres" class="genre-grid"></div></details>
           <div id="quantity-picker" class="quantity-picker"></div>
