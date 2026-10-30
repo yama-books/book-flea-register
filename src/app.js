@@ -4,6 +4,7 @@ import {setupCustomerControls} from './customer-controls.js';
 import {openPractice,draftKey,practiceBackup} from './practice.js';
 import {setupStaffCall} from './staff-call.js';
 import {setupFullscreen} from './menu.js';
+import {salesSummary,pieGradient} from './sales-summary.js';
 const $=s=>document.querySelector(s);
 const yen=n=>new Intl.NumberFormat('ja-JP').format(n)+'円';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -80,12 +81,22 @@ function renderHistory(){
     return `<article class="history-item ${v?'voided':''}"><div class="history-top"><span>#${String(r.receiptNo).padStart(4,'0')} ${v?'<span class="void-badge">取消済み</span>':''}</span><strong>${yen(r.totalYen)}</strong></div><p class="history-meta">${new Date(r.committedAt).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} · ${r.quantityTotal}点${r.correctionOfId?' · 訂正会計':''}</p><details><summary>明細・お預かりを見る</summary>${r.items.map(i=>`<p>${esc(i.colorLabel)} / ${esc(i.genreLabel)}<br>${yen(i.unitPriceYen)} × ${i.quantity}点 = ${yen(i.lineTotalYen)}</p>`).join('')}<p>お預かり ${yen(r.receivedYen)} / お釣り ${yen(r.changeYen)}<br>確定時の累計 ${yen(r.cumulativeAtCommitYen)}</p>${v?`<p>取消: ${esc(v.reason)}<br>${new Date(v.voidedAt).toLocaleString('ja-JP')}</p>`:`<button data-correct="${esc(r.id)}" ${busy?'disabled':''}>訂正</button><button data-void="${esc(r.id)}" ${busy?'disabled':''}>取消</button>`}</details></article>`;
   }).join(''):'<div class="empty-history">まだ売上の記録はありません。<br>「完了」を押すと、ここに残ります。</div>';
   $('#more-history').hidden=state.receipts.length<=historyLimit;
-  $('#summaries').innerHTML=[['価格別',i=>yen(i.unitPriceYen)],['色別',i=>i.colorLabel],['分類別',i=>i.genreLabel]].map(([label,group])=>{
-    const map=new Map();for(const r of today)for(const i of r.items){const k=group(i),v=map.get(k)??{quantity:0,amount:0};v.quantity+=i.quantity;v.amount+=i.lineTotalYen;map.set(k,v);}
-    return `<section class="summary-group"><h4>${label}</h4>${map.size?[...map].map(([name,v])=>`<p><span>${esc(name)} · ${v.quantity}点</span><strong>${yen(v.amount)}</strong></p>`).join(''):'<p>まだ記録はありません</p>'}</section>`;
-  }).join('');
+  renderSummary(date);
   $('#csv').disabled=busy||!ready;$('#backup').disabled=busy||!ready;
 }
+function renderSummary(date=localDate()){
+  const data=salesSummary(state,date),target=$('#summaries');
+  if(!data.totalYen){target.innerHTML='<p class="summary-empty">まだ記録はありません。会計を保存すると表示します。</p>';return;}
+  if($('#summary-mode').value==='hourly'){
+    const max=Math.max(...data.hours.map(h=>h.amountYen));
+    target.innerHTML='<h4>時間帯別の売上（1時間ごと）</h4><p class="mini-note">会計を完了した時刻で集計します。</p><div class="hour-chart">'+data.hours.map(h=>`<div class="hour-row"><span>${String(h.hour).padStart(2,'0')}〜${String(h.hour+1).padStart(2,'0')}時</span><div class="hour-track" aria-hidden="true"><div style="width:${h.amountYen/max*100}%"></div></div><strong>${yen(h.amountYen)}</strong><small>${h.quantity}点 · ${h.receipts}会計</small></div>`).join('')+'</div>';
+    return;
+  }
+  const description=data.categories.map(g=>`${g.name} ${yen(g.amountYen)}`).join('、');
+  target.innerHTML=`<h4>分類別の売上金額</h4><div class="category-chart"><div id="sales-pie" class="sales-pie" role="img" aria-label="${esc(description)}"></div><div class="chart-legend">${data.categories.map(g=>`<div class="legend-row"><span class="legend-dot" style="background:${g.color}" aria-hidden="true"></span><span>${esc(g.name)}<small>${g.quantity}点 · ${(g.amountYen/data.totalYen*100).toFixed(1)}%</small></span><strong>${yen(g.amountYen)}</strong></div>`).join('')}</div></div>`;
+  $('#sales-pie').style.background=pieGradient(data.categories);
+}
+$('#summary-mode').addEventListener('change',()=>renderSummary());
 function render(){
   document.body.classList.toggle('practice-mode',practice);$('#practice-banner').hidden=!practice;
   $('#toggle-practice').textContent=practice?'本番モードに戻る':'練習モード';$('#toggle-practice').disabled=busy||!ready;
@@ -107,7 +118,6 @@ async function switchMode(next){
   finally{busy=false;render();}
 }
 $('#toggle-practice').onclick=()=>{
-  $('#app-menu').open=false;
   confirmAction(practice?'本番モードに戻る':'練習モードに切り替える','入力途中の会計は現在のモードに残します。練習の記録は本番の売上と分けて保存し、お客さん画面は待機表示にします。',()=>switchMode(!practice));
 };
 // index省略時はマークの1点追加。同じ価格・マーク・分類の明細へまとめる。
@@ -147,14 +157,13 @@ function renderEditor(){
   $('#mapping-editor').innerHTML=editor.colors.map(c=>`<div class="mapping-row"><span class="mapping-name">${mark(c.id,c.hex)}${esc(c.label)}</span><select data-mapping="${c.id}" aria-label="${esc(c.label)}の価格"><option value="">価格を選択</option>${editor.prices.map(p=>`<option value="${esc(p.id)}" ${c.priceId===p.id?'selected':''}>${yen(p.amountYen)}</option>`).join('')}</select><input type="text" data-category="${c.id}" maxlength="${MAX_CATEGORY}" value="${esc(c.category)}" placeholder="未分類" aria-label="${esc(c.label)}の分類名" autocomplete="off"></div>`).join('');
 }
 function openSettings(){
-  $('#app-menu').open=false;
   if(busy||!ready)return;
-  if(practice){notify('練習は本番と同じ設定を使います。設定を変更するときは本番モードに戻ってください。');return;}
-  if(state.settings.initialized&&(draft.items.length||draft.correctionOfId)){notify('設定を変える前に、会計を完了するか「やりなおす」で会計を空にしてください。',true);return;}
-  editor=copy(state.settings);$('#setup-help').textContent=state.settings.initialized?'価格や分類名を変更しても、過去の売上は変わりません。':`最初に、${COLORS.length}種類のマークの値札と価格を対応させてください。`;$('#settings-error').textContent='';renderEditor();$('#settings-dialog').showModal();
+  const locked=settingsLocked();$('#settings-edit-fields').disabled=locked;$('#restore').disabled=locked;
+  editor=copy(state.settings);$('#setup-help').textContent=practice?'本番と共通の設定です。変更は本番モードで行ってください。':locked?'会計中もお客さん表示につなげます。価格や分類名の変更は会計を空にしてから行ってください。':state.settings.initialized?'価格や分類名を変更しても、過去の売上は変わりません。':`最初に、${COLORS.length}種類のマークの値札と価格を対応させてください。`;$('#settings-error').textContent='';renderEditor();$('#settings-dialog').showModal();
 }
+function settingsLocked(){return practice||Boolean(state.settings.initialized&&(draft.items.length||draft.correctionOfId));}
 async function submitSettings(e){
-  e.preventDefault();if(busy)return;
+  e.preventDefault();if(busy||settingsLocked())return;
   try{
     const settings=copy(editor);settings.initialized=true;for(const c of settings.colors)c.category=c.category.trim();validateSettings(settings);
     busy=true;$('#settings-form button[type=submit]').disabled=true;
@@ -182,9 +191,10 @@ $('#received').addEventListener('input',e=>{draft.received=e.target.value;persis
 $('#complete').addEventListener('click',finish);
 $('#clear-draft').addEventListener('click',()=>confirmAction('いまの会計をやりなおす','未確定の入力をクリアします。保存済みの履歴は変わりません。',()=>{draft=blank();lastSale=null;persistDraft();render();notify('会計を空にしました。');}));
 $('#open-settings').addEventListener('click',openSettings);
+$('#open-customer').addEventListener('click',()=>$('#settings-dialog').close(),{capture:true});
 $('#close-settings').addEventListener('click',()=>{if(!busy)$('#settings-dialog').close();});
 $('#reset-settings').addEventListener('click',()=>{
-  if(busy)return;
+  if(busy||settingsLocked())return;
   confirmAction('設定をすべて初期状態に戻す','価格の選択肢を100/200/400円、全マークを100円、分類名を初期値に戻して保存します。\n売上の記録・取消・訂正は変わりません。',async()=>{
     if(busy)return;busy=true;$('#reset-settings').disabled=true;
     try{state=await changeState(db,state.revision,s=>{s.settings=initialState().settings;return s;});editor=copy(state.settings);renderEditor();$('#settings-error').textContent='';$('#settings-dialog').close();notify('設定を初期状態に戻しました。');broadcast();}

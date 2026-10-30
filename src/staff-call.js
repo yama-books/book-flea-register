@@ -23,7 +23,7 @@ export function setupStaffCall({isPractice}){
   const $=s=>document.querySelector(s);let sending=false;
   const getSettings=()=>{try{return readCallSettings(localStorage);}catch{return null;}};
   $('#open-call').onclick=()=>{
-    const settings=getSettings();$('#app-menu').open=false;$('#call-dialog').showModal();
+    const settings=getSettings();$('#call-dialog').showModal();
     $('#call-mode').textContent=isPractice()?'練習モードです。実際にはメールを送りません。':'入力した要件を山本へメールで送ります。';
     $('#call-submit').textContent=isPractice()?'呼出を練習する':'山本を呼ぶ（メール送信）';
     $('#call-status').textContent=settings?.shared?'入場カウンターと共通の端末設定を使用します。':settings?'':isPractice()?'':'送信設定がまだありません。';

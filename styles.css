@@ -210,13 +210,6 @@ textarea{display:block;width:100%;resize:vertical;font:12px/1.5 ui-monospace,mon
 }
 
 /* メニューと練習専用の会計エリア。素材・本文の読みやすさは保持する。 */
-.app-menu{position:relative}
-.app-menu>summary{list-style:none;cursor:pointer;min-height:48px;padding:12px 18px;border:1px solid var(--line);border-radius:5px;background:var(--paper);font-weight:700;font-size:.85rem}
-.app-menu>summary::-webkit-details-marker{display:none}
-.menu-items{position:absolute;right:0;top:calc(100% + 8px);z-index:10;width:240px;padding:10px;background:var(--paper);border:2px solid var(--ink);border-radius:6px;box-shadow:0 5px 0 #17233315;display:grid;gap:8px}
-.menu-items button{width:100%;text-align:left}
-#menu-status:empty{display:none}
-#menu-status{margin:0;font-size:.8rem;line-height:1.7}
 .practice-banner{padding:12px 16px;background:#5c3782;color:white;border:2px solid #452360;border-radius:6px;font-weight:800;text-align:center}
 .practice-mode .register{padding:10px;border:3px dashed #77469b;border-radius:9px;background:repeating-linear-gradient(135deg,#f0e4fa 0px,#f0e4fa 8px,#e4d1f2 8px,#e4d1f2 10px)}
 .practice-mode .register .panel-body{background:#faf3ff}
@@ -226,3 +219,29 @@ textarea{display:block;width:100%;resize:vertical;font:12px/1.5 ui-monospace,mon
 .practice-mode #call-dialog{border:3px dashed #77469b;background:#faf3ff}
 #call-mode{font-weight:700}
 #call-settings input{display:block;width:100%;margin:6px 0 14px}
+
+/* 頻繁に使う操作は最上部に常設。接続と全画面は設定へ。 */
+.app-header{position:sticky;top:0;z-index:20;background:var(--paper);padding:4px 0}
+#settings-edit-fields{border:0;padding:0;margin:0;min-width:0}
+#settings-edit-fields:disabled{opacity:.65}
+#settings-edit-fields>.primary{width:100%;margin-top:6px}
+.settings-display{border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:14px}
+.settings-display h3{margin-top:8px}
+.settings-display button{margin:0 6px 8px 0}
+.summary-picker{display:flex;align-items:center;gap:10px;margin-top:12px}
+.summary-picker select{flex:1;min-width:0;font-size:.8rem}
+#summaries h4{margin:14px 0;font-size:.85rem}
+.summary-empty{font-size:.8rem;line-height:1.8;color:var(--muted)}
+.category-chart{display:grid;grid-template-columns:minmax(90px,140px) minmax(0,1fr);align-items:center;gap:16px}
+.sales-pie{aspect-ratio:1;width:100%;border-radius:50%;border:1px solid #80918c;box-shadow:0 2px 0 #17233312}
+.chart-legend{display:grid;gap:10px}
+.legend-row{display:grid;grid-template-columns:12px minmax(0,1fr) auto;align-items:center;gap:7px;font-size:.78rem}
+.legend-dot{width:12px;height:12px;border:1px solid #697782;border-radius:3px}
+.legend-row small{display:block;color:var(--muted);font-size:.66rem;margin-top:3px}
+.legend-row strong{font-variant-numeric:tabular-nums;white-space:nowrap}
+.hour-chart{display:grid;gap:12px;margin-top:16px}
+.hour-row{display:grid;grid-template-columns:64px minmax(25px,1fr) auto;gap:6px 8px;align-items:center;font-size:.75rem}
+.hour-track{height:16px;background:#edf0ed;border-radius:2px;overflow:hidden}
+.hour-track>div{height:100%;background:var(--green);min-width:0}
+.hour-row small{grid-column:2/-1;color:var(--muted);font-size:.66rem}
+@media(max-width:560px){.category-chart{grid-template-columns:110px minmax(0,1fr);gap:12px}.app-header{gap:8px}.header-actions{gap:5px}.header-actions button{padding:8px 9px}}

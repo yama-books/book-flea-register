@@ -17,6 +17,7 @@ test('全画面の開始・終了と非対応を区別する',async()=>{
   assert.equal(await toggleFullscreen(doc),true);assert.equal(entered,1);
   doc.fullscreenElement={};assert.equal(await toggleFullscreen(doc),true);assert.equal(exited,1);
   assert.equal(await toggleFullscreen({documentElement:{}}),false);
+  assert.equal(await toggleFullscreen({fullscreenEnabled:false,documentElement:{requestFullscreen:async()=>assert.fail('disabled')}}),false);
   await assert.rejects(toggleFullscreen({documentElement:{requestFullscreen:async()=>{throw new Error('denied');}}}),/denied/);
 });
 const config={url:'https://script.google.com/macros/s/test-only-not-deployed/exec',key:'test-only-not-a-secret'};
