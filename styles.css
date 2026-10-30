@@ -51,7 +51,8 @@ main{display:flex;flex-direction:column;gap:18px}
 .received-row label{font-size:1rem;font-weight:750}
 .yen-input{display:flex;align-items:center;gap:8px;flex:1;max-width:300px}
 .yen-input input{text-align:right;width:100%;font-size:1.7rem;font-weight:750;font-variant-numeric:tabular-nums;padding:6px 12px;min-height:56px}
-.quick-money{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0 0}
+.quick-money{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin:10px 0 0}
+.quick-money button.is-current{border-color:var(--green);background:#e4f1e8;color:var(--green)}
 .quick-money button{font-size:.85rem;min-height:48px;padding:6px 4px;background:#f7f8f4;border-color:#c9d1c6;box-shadow:none}
 .reset-button{margin-top:auto;width:100%;min-height:58px;font-size:1.1rem;color:var(--danger);border-color:#d5a9ad;background:#fffafa}
 .payment+.reset-button{margin-top:16px}
@@ -139,6 +140,7 @@ dialog input,dialog select{min-width:0}
 .generator button{font-size:.75rem}
 .error-text{color:var(--danger);line-height:1.6;min-height:22px;font-size:.8rem}
 #settings-form>.primary{width:100%;margin-top:6px}
+.reset-settings{width:100%;margin-top:22px;color:var(--danger);border-color:#d5a9ad;background:#fffafa}
 #confirm-dialog{width:min(470px,calc(100% - 28px))}
 #confirm-message{white-space:pre-line}
 .confirm-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:22px}
@@ -188,7 +190,7 @@ textarea{display:block;width:100%;resize:vertical;font:12px/1.5 ui-monospace,mon
   .color-grid{gap:6px}
   .color-choice{min-height:84px}
   .swatch{width:34px;height:34px}
-  .quick-money{grid-template-columns:repeat(2,1fr)}
+  .quick-money{grid-template-columns:repeat(3,1fr)}
   .cart-row{grid-template-columns:auto minmax(0,1fr) auto;row-gap:4px}
   .cart-stepper{grid-column:2/-1;justify-content:flex-end}
   .bill-total dd{font-size:2.2rem}

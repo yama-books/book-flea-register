@@ -37,6 +37,14 @@ export function migrateMarkers(state) {
   return state;
 }
 export function categoryOf(color) { return color?.category?.trim() || '未分類'; }
+// お客さんが出しうる、お釣りが必要な金額の候補。合計を500円玉・千円札・五千円札・一万円札の単位で切り上げる。
+export const TENDER_UNITS = [500,1000,5000,10000];
+export function tenderCandidates(totalYen) {
+  integer(totalYen);
+  if (!totalYen) return [];
+  const amounts=TENDER_UNITS.map(unit=>Math.ceil(totalYen/unit)*unit).filter(n=>n>totalYen&&n<=MAX_MONEY);
+  return [...new Set(amounts)].sort((a,b)=>a-b);
+}
 export function localDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 }

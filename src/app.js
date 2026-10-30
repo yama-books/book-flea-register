@@ -1,4 +1,4 @@
-import {COLORS,copy,initialState,integer,parseMoney,totals,localDate,activeReceipts,salesTotal,validateSettings,voidSale,backupJSON,parseBackup,exportCSV,categoryOf,MAX_QUANTITY,MAX_CATEGORY} from './calculation.js';
+import {COLORS,copy,initialState,integer,parseMoney,totals,localDate,activeReceipts,salesTotal,validateSettings,voidSale,backupJSON,parseBackup,exportCSV,categoryOf,tenderCandidates,MAX_QUANTITY,MAX_CATEGORY} from './calculation.js';
 import {openStore,readState,changeState,saveSale,restoreState} from './storage.js';
 import {setupCustomerControls} from './customer-controls.js';
 const $=s=>document.querySelector(s);
@@ -20,8 +20,10 @@ function itemFor(colorId){
 }
 const textMarks={so:'そ',cd:'CD'};
 function mark(id,hex,extra=''){const label=textMarks[id];return `<span class="swatch${label?` text-mark ${id}-mark`:''}${extra}" style="background:${esc(hex)}" aria-hidden="true">${label??''}</span>`;}
+// ボタンと明細には分類名を出す。分類名が空のマークは色名で表示する。
+const displayName=(category,colorLabel)=>category&&category!=='未分類'?category:colorLabel;
 function renderColors(){
-  $('#colors').innerHTML=state.settings.colors.map(c=>{const p=state.settings.prices.find(p=>p.id===c.priceId);return `<button class="color-choice" data-color="${esc(c.id)}" aria-label="${esc(c.label)} ${p?yen(p.amountYen)+'を1点追加':'価格未設定'}" ${!ready||busy||!p?'disabled':''}>${mark(c.id,c.hex)}<span class="color-name">${esc(c.label)}</span><span class="color-price">${p?yen(p.amountYen):'未設定'}</span></button>`;}).join('');
+  $('#colors').innerHTML=state.settings.colors.map(c=>{const p=state.settings.prices.find(p=>p.id===c.priceId),name=displayName(c.category?.trim(),c.label);return `<button class="color-choice" data-color="${esc(c.id)}" aria-label="${esc(name)}（${esc(c.label)}） ${p?yen(p.amountYen)+'を1点追加':'価格未設定'}" ${!ready||busy||!p?'disabled':''}>${mark(c.id,c.hex)}<span class="color-name">${esc(name)}</span><span class="color-price">${p?yen(p.amountYen):'未設定'}</span></button>`;}).join('');
 }
 function payment(){
   const {totalYen,quantityTotal}=totals(draft.items);let received=null;
@@ -38,9 +40,9 @@ function customerView(){
 function renderCart(){
   let t;try{t=totals(draft.items);}catch(e){notify(e.message,true);return;}
   $('#total').innerHTML=`${new Intl.NumberFormat('ja-JP').format(t.totalYen)}<span>円</span>`;$('#count').textContent=t.quantityTotal;
-  $('#draft-label').textContent=draft.correctionOfId?'履歴を残して、この会計を訂正中':'1タップで1点追加';
+  $('#draft-label').textContent=draft.correctionOfId?'履歴を残して訂正中':'';
   $('.register').classList.toggle('is-correcting',Boolean(draft.correctionOfId));
-  $('#cart').innerHTML=draft.items.length?draft.items.map((i,n)=>`<div class="cart-row">${mark(i.colorId,i.colorHex)}<div class="cart-description"><strong>${esc(i.colorLabel)}</strong><span>${yen(i.unitPriceYen)} × <b>${i.quantity}</b></span></div><strong class="cart-amount">${yen(i.lineTotalYen)}</strong><div class="cart-stepper"><button data-row="${n}" data-delta="-1" aria-label="${esc(i.colorLabel)}を1点減らす" ${busy?'disabled':''}>−</button><button data-row="${n}" data-delta="1" aria-label="${esc(i.colorLabel)}を1点増やす" ${busy||i.quantity>=MAX_QUANTITY?'disabled':''}>＋</button></div></div>`).join(''):'<p class="cart-empty">左のマークをタップすると、<br>ここに明細が出ます。</p>';
+  $('#cart').innerHTML=draft.items.length?draft.items.map((i,n)=>`<div class="cart-row">${mark(i.colorId,i.colorHex)}<div class="cart-description"><strong>${esc(displayName(i.genreLabel,i.colorLabel))}</strong><span>${yen(i.unitPriceYen)} × <b>${i.quantity}</b></span></div><strong class="cart-amount">${yen(i.lineTotalYen)}</strong><div class="cart-stepper"><button data-row="${n}" data-delta="-1" aria-label="${esc(displayName(i.genreLabel,i.colorLabel))}を1点減らす" ${busy?'disabled':''}>−</button><button data-row="${n}" data-delta="1" aria-label="${esc(displayName(i.genreLabel,i.colorLabel))}を1点増やす" ${busy||i.quantity>=MAX_QUANTITY?'disabled':''}>＋</button></div></div>`).join(''):'<p class="cart-empty">左のマークをタップすると、<br>ここに明細が出ます。</p>';
   $('#received').value=draft.received;$('#received').disabled=busy||!ready;
   $('#open-settings').disabled=busy||!ready;
   $('#clear-draft').disabled=busy||!ready||(!draft.items.length&&!draft.correctionOfId&&!draft.received);
@@ -57,7 +59,8 @@ function renderPayment(){
   $('#payment-hint').classList.toggle('short',received!==null&&received<totalYen&&Boolean(draft.items.length));
   $('#complete').disabled=Boolean(error)||busy||!ready||!state.settings.initialized;
   $('#complete').innerHTML=busy?'保存しています…':`${draft.correctionOfId?'訂正を完了':'完了'} <span>会計を保存して、次のお客さんへ</span>`;
-  document.querySelectorAll('[data-money]').forEach(b=>{b.disabled=busy||!ready||!draft.items.length;});
+  const off=busy||!ready||!draft.items.length?'disabled':'';
+  $('#quick-money').innerHTML=`<button data-money="exact" ${off}>ちょうど</button>`+tenderCandidates(totalYen).map(n=>`<button data-money="${n}" class="${String(n)===draft.received?'is-current':''}" ${off}>${yen(n)}</button>`).join('');
   customerDisplay.publish(customerView());
 }
 function renderHistory(){
@@ -150,6 +153,15 @@ $('#complete').addEventListener('click',finish);
 $('#clear-draft').addEventListener('click',()=>confirmAction('いまの会計をやりなおす','未確定の入力をクリアします。保存済みの履歴は変わりません。',()=>{draft=blank();lastSale=null;persistDraft();render();notify('会計を空にしました。');}));
 $('#open-settings').addEventListener('click',openSettings);
 $('#close-settings').addEventListener('click',()=>{if(!busy)$('#settings-dialog').close();});
+$('#reset-settings').addEventListener('click',()=>{
+  if(busy)return;
+  confirmAction('設定をすべて初期状態に戻す','価格の選択肢を100/200/400円、全マークを100円、分類名を初期値に戻して保存します。\n売上の記録・取消・訂正は変わりません。',async()=>{
+    if(busy)return;busy=true;$('#reset-settings').disabled=true;
+    try{state=await changeState(db,state.revision,s=>{s.settings=initialState().settings;return s;});editor=copy(state.settings);renderEditor();$('#settings-error').textContent='';$('#settings-dialog').close();notify('設定を初期状態に戻しました。');broadcast();}
+    catch(error){$('#settings-error').textContent=error.message;try{state=await readState(db);}catch{}}
+    finally{busy=false;$('#reset-settings').disabled=false;render();}
+  });
+});
 $('#settings-dialog').addEventListener('cancel',e=>{if(busy)e.preventDefault();});
 $('#settings-form').addEventListener('submit',submitSettings);
 $('#settings-form').addEventListener('input',e=>{
