@@ -26,8 +26,8 @@
 
 ## 未確定事項
 
-6色の初期価格割当は初回設定で指定。分類は任意/未分類という実装案で開始可能。CDの呼称、営業日締め、上限、素材再配布条件はREQUIREMENTSの未確定一覧を見る。画像の生成元・利用条件は独立に確認されたものではない。
+6マークの初期価格はユーザー承認によりすべて100円。分類は任意/未分類という実装案で開始可能。CDの呼称、営業日締め、上限、素材再配布条件はREQUIREMENTSの未確定一覧を見る。画像の生成元・利用条件は独立に確認されたものではない。
 
 ## 次のセッションへそのまま渡す文
 
-> yama-books/book-flea-registerの最新mainとREADME、AGENTS.md、docs/REQUIREMENTS.md、docs/UI_DESIGN.md、docs/VALIDATION.mdを読んで初期版を引き継いでください。モデル画像由来のPNGとシンプルな会計中心UIを維持し、ネコのSVG描き直しや不要な機能追加は行わないでください。計算はsrc/calculation.js、IndexedDB保存はsrc/storage.js、操作はsrc/app.jsです。初期価格100/200/400円、色価格は初回設定、「完了」で保存成功後のみ次会計へ進む設計を守ってください。まずiPad Safari実機で数字キーボード・CSV/JSON保存・再起動後の履歴・横縦画面を確認し、結果に基づいて必要な修正を行ってください。GitHubと公開先の保存内容を読戻し、売上やバックアップをリポジトリへ入れないでください。
+> yama-books/book-flea-registerの最新mainとREADME、AGENTS.md、docs/REQUIREMENTS.md、docs/UI_DESIGN.md、docs/VALIDATION.mdを読んで初期版を引き継いでください。モデル画像由来のPNGとシンプルな会計中心UIを維持し、ネコのSVG描き直しや不要な機能追加は行わないでください。計算はsrc/calculation.js、IndexedDB保存はsrc/storage.js、操作はsrc/app.jsです。初期価格100/200/400円、マークの初期価格はすべて100円、「完了」で保存成功後のみ次会計へ進む設計を守ってください。まずiPad Safari実機で数字キーボード・CSV/JSON保存・再起動後の履歴・横縦画面を確認し、結果に基づいて必要な修正を行ってください。GitHubと公開先の保存内容を読戻し、売上やバックアップをリポジトリへ入れないでください。

@@ -2,7 +2,7 @@ import {AmountLink} from './amount-link.js';
 import {ensureQR,drawQR,qrReader} from './qr.js';
 export function setupCustomerControls(){
   const $=s=>document.querySelector(s),status=$('#pair-status');let working=false;
-  const labels={idle:'未接続',pairing:'QRを交換してください',connecting:'接続しています…',connected:'接続済み · 金額を自動更新',disconnected:'接続が切れました。QRを作り直してください。',stale:'表示の更新を待っています'};
+  const labels={idle:'未接続',pairing:'接続情報を準備しています…',connecting:'接続しています…',connected:'接続済み · 金額を自動更新',disconnected:'接続が切れました。QRを作り直してください。',stale:'表示の更新を待っています'};
   const link=new AmountLink({role:'sender',onState:state=>{
     status.textContent=labels[state]||state;
     $('#open-customer').textContent=state==='connected'?'お客さん表示 · 接続済み':'お客さん表示';

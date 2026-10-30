@@ -13,14 +13,16 @@ export function parseMoney(text) {
 }
 export function initialState() {
   return {schemaVersion:1, revision:0, nextReceiptNo:1,
-    settings:{initialized:false, prices:[100,200,400].map(n=>({id:`p${n}`,amountYen:n})), colors:COLORS.map(([id,label,hex])=>({id,label,hex,priceId:''})), genres:GENRES.map((label,i)=>({id:`g${i}`,label}))}, receipts:[], voids:[]};
+    settings:{markerVersion:2, initialized:true, prices:[100,200,400].map(n=>({id:`p${n}`,amountYen:n})), colors:COLORS.map(([id,label,hex])=>({id,label,hex,priceId:'p100'})), genres:GENRES.map((label,i)=>({id:`g${i}`,label}))}, receipts:[], voids:[]};
 }
 export function migrateMarkers(state) {
   const colors=state?.settings?.colors;
-  if(Array.isArray(colors) && colors.some(c=>c.id==='pink') && !colors.some(c=>c.id==='so')){
+  if(state?.schemaVersion===1 && Array.isArray(colors) && state.settings.markerVersion!==2){
+    const legacy=copy(state.settings);
+    legacy.colors=legacy.colors.map(c=>c.id==='pink'?{...c,id:'so',label:'そ',hex:'#ffffff'}:c);
+    validateSettings(legacy,!legacy.initialized);
     state=copy(state);
-    state.settings.colors=state.settings.colors.map(c=>c.id==='pink'?{id:'so',label:'そ',hex:'#ffffff',priceId:''}:c);
-    state.settings.initialized=false;
+    state.settings=initialState().settings;
   }
   return state;
 }
