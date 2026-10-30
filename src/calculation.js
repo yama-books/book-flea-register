@@ -71,7 +71,7 @@ export function makeReceipt(state, draft, now = new Date()) {
   const correctionOfId=draft.correctionOfId || null;
   if (correctionOfId && !activeReceipts(state).some(r=>r.id===correctionOfId)) throw new Error('訂正元の会計が変更されています。再読込してください。');
   const prior=activeReceipts(state).filter(r=>r.id!==correctionOfId);
-  return {id:draft.id,receiptNo:integer(state.nextReceiptNo,1,Number.MAX_SAFE_INTEGER-1),committedAt:now.toISOString(),businessDate:localDate(now),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone || 'local',utcOffsetMinutes:-now.getTimezoneOffset(),items,quantityTotal,totalYen,receivedYen,changeYen:receivedYen-totalYen,cumulativeAtCommitYen:integer(salesTotal(prior)+totalYen,0,Number.MAX_SAFE_INTEGER),correctionOfId};
+  return {id:draft.id,receiptNo:integer(state.nextReceiptNo,1,Number.MAX_SAFE_INTEGER-1),committedAt:now.toISOString(),businessDate:localDate(now),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone || 'local',utcOffsetMinutes:0-now.getTimezoneOffset(),items,quantityTotal,totalYen,receivedYen,changeYen:receivedYen-totalYen,cumulativeAtCommitYen:integer(salesTotal(prior)+totalYen,0,Number.MAX_SAFE_INTEGER),correctionOfId};
 }
 export function addSale(state,draft,now = new Date()) {
   if (state.receipts.some(r=>r.id===draft.id)) return state;

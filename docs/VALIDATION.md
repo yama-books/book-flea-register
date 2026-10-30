@@ -4,7 +4,7 @@
 
 ## 実施済み
 
-- Node.jsの計算・不正入力・重複・snapshot不変・取消・訂正・バックアップ検証・CSVの自動テスト10件が成功。
+- Node.jsの計算・不正入力・重複・snapshot不変・取消・訂正・バックアップ検証・CSV・UTC時差ゼロの自動テスト11件を日本時間とUTCの両方で確認。
 - src/app.js、src/storage.js、src/calculation.jsの構文確認。
 - Chromeのtests/browser.htmlでIndexedDB統合テスト7件が成功。再接続、重複排除、revision競合、トランザクションのロールバック、訂正差替、復元、閉じたDBでの保存失敗を確認。
 - ユーザーが今回の差分とテスト結果の送信を明示許可。Jev（provider=typesafe）の完了監査は7主張verified、contradicted/unsupported/reviewは0。これは上記テストと限定した保存仕様の証拠確認であり、Safari実機検収ではない。

@@ -4,5 +4,8 @@ for(const file of ['src/calculation.js','src/storage.js','src/app.js','tests/bro
   if(result.status!==0)process.exit(result.status??1);
   console.log(`PASS syntax ${file}`);
 }
-const result=spawnSync(process.execPath,['--test','tests/calculation.test.js'],{stdio:'inherit'});
-process.exit(result.status??1);
+for(const timezone of ['Asia/Tokyo','UTC']){
+  console.log(`TEST TIMEZONE ${timezone}`);
+  const result=spawnSync(process.execPath,['--test','tests/calculation.test.js'],{stdio:'inherit',env:{...process.env,TZ:timezone}});
+  if(result.status!==0)process.exit(result.status??1);
+}
