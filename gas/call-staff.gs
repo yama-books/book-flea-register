@@ -19,6 +19,9 @@ function doPost(e) {
   const text = String(body.text || '').trim().slice(0, 500);
   if (!text) return json_({ ok: false, error: '要件が空です' });
   const staff = String(body.staff || '未設定').slice(0, 80);
+  // Explicit source is preferred; legacy book-flea-register requests are also recognized.
+  const isBookSale = body.source === 'book-sale' || (!body.source && staff === '古本フリマレジ');
+  const subject = isBookSale ? '【古本市レジより】山本を呼ぶ' : '【図書館受付より】山本を呼ぶ';
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) return json_({ ok: false, error: '混み合っています。もう一度送信してください' });
@@ -31,7 +34,7 @@ function doPost(e) {
     const time = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm');
     MailApp.sendEmail({
       to: recipient,
-      subject: '【古本フリマレジ】山本を呼ぶ',
+      subject,
       body: `要件：\n${text}\n\n担当：${staff}\n送信：${time}\n`,
     });
     cache.put('recent', '1', COOLDOWN_SECONDS);
