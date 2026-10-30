@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import fs from 'node:fs';
+import {encodeSignal,decodeSignal,extractToken,SIGNAL_LIFETIME,amountMessage,readAmount} from '../src/signaling.js';
+const context=vm.createContext({Uint8Array,Uint8ClampedArray,ArrayBuffer,DataView,TextEncoder,TextDecoder,console});context.self=context;context.window=context;
+for(const file of ['fflate.js','qrcode.js','jsqr.js'])vm.runInContext(fs.readFileSync(new URL('../vendor/'+file,import.meta.url),'utf8'),context);
+globalThis.fflate=context.fflate;
+const makeSignal=(kind='offer')=>({v:1,kind,session:'a'.repeat(32),expires:Date.now()+SIGNAL_LIFETIME,sdp:'v=0\r\no=- 123 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n'+('a=candidate:123 1 udp 123 192.0.2.1 9999 typ host\r\n').repeat(12)});
+test('圧縮した接続情報が往復し、共有リンクからも取り出せる',()=>{const s=makeSignal(),token=encodeSignal(s);assert.deepEqual(decodeSignal(token,'offer'),s);assert.equal(extractToken('https://example.test/customer.html#pair='+token),token);assert.deepEqual(decodeSignal('https://example.test/customer.html#pair='+token,'offer'),s);});
+test('期限切れ・種類違い・別接続の返答を拒否する',()=>{const s=makeSignal(),token=encodeSignal(s);assert.throws(()=>decodeSignal(token,'offer',null,s.expires+1));assert.throws(()=>decodeSignal(token,'answer'));assert.throws(()=>decodeSignal(token,'offer','b'.repeat(32)));assert.throws(()=>decodeSignal('BFR1.not-a-payload','offer'));assert.throws(()=>extractToken('https://example.test/'));assert.throws(()=>encodeSignal({...s,expires:Date.now()+2*SIGNAL_LIFETIME}));});
+test('金額パケットは売上明細を含まず、不正・古い順番を拒否する',()=>{const data=amountMessage(600,1);assert.deepEqual(Object.keys(data),['v','type','amountYen','sequence']);assert.deepEqual(readAmount(JSON.stringify(data)),{amountYen:600,sequence:1});for(const value of [-1,NaN,Infinity,1.2,100000000])assert.throws(()=>amountMessage(value,1));assert.equal(readAmount(JSON.stringify(data),1),null);assert.equal(readAmount('{"v":1,"type":"amount","amountYen":-1,"sequence":2}'),null);assert.equal(readAmount('not json'),null);});
+test('実際のQR生成と読取ライブラリで接続URLを復元できる',()=>{const url='https://yama-books.github.io/book-flea-register/customer.html#pair='+encodeSignal(makeSignal()),qr=context.qrcode(0,'L');qr.addData(url);qr.make();const n=qr.getModuleCount(),cell=4,size=(n+8)*cell,data=new Uint8ClampedArray(size*size*4).fill(255);for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(qr.isDark(y,x))for(let dy=0;dy<cell;dy++)for(let dx=0;dx<cell;dx++){const i=(((y+4)*cell+dy)*size+(x+4)*cell+dx)*4;data[i]=data[i+1]=data[i+2]=0;}assert.equal(context.jsQR(data,size,size)?.data,url);});

@@ -1,6 +1,6 @@
 export const MAX_MONEY = 99_999_999;
 export const MAX_QUANTITY = 999;
-export const COLORS = [['red','赤','#e85c63'],['yellow','黄','#f2c94c'],['green','緑','#47a785'],['white','白','#ffffff'],['blue','青','#559bd5'],['pink','ピンク','#ec96bf']];
+export const COLORS = [['red','赤','#e85c63'],['yellow','黄','#f2c94c'],['green','緑','#47a785'],['white','白','#ffffff'],['blue','青','#559bd5'],['so','そ','#ffffff']];
 export const GENRES = ['文庫','新書','漫画','その他書籍','専門書','CD'];
 export const copy = value => JSON.parse(JSON.stringify(value));
 export function integer(value, min = 0, max = MAX_MONEY) {
@@ -14,6 +14,15 @@ export function parseMoney(text) {
 export function initialState() {
   return {schemaVersion:1, revision:0, nextReceiptNo:1,
     settings:{initialized:false, prices:[100,200,400].map(n=>({id:`p${n}`,amountYen:n})), colors:COLORS.map(([id,label,hex])=>({id,label,hex,priceId:''})), genres:GENRES.map((label,i)=>({id:`g${i}`,label}))}, receipts:[], voids:[]};
+}
+export function migrateMarkers(state) {
+  const colors=state?.settings?.colors;
+  if(Array.isArray(colors) && colors.some(c=>c.id==='pink') && !colors.some(c=>c.id==='so')){
+    state=copy(state);
+    state.settings.colors=state.settings.colors.map(c=>c.id==='pink'?{id:'so',label:'そ',hex:'#ffffff',priceId:''}:c);
+    state.settings.initialized=false;
+  }
+  return state;
 }
 export function localDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
@@ -50,7 +59,7 @@ export function totals(items) {
 export function validateItem(item) {
   text(item.priceId); text(item.colorId); text(item.colorLabel); text(item.genreLabel);
   if (item.genreId!==null) text(item.genreId);
-  if (!COLORS.some(([id])=>id===item.colorId) || !/^#[0-9a-f]{6}$/i.test(item.colorHex)) throw new Error('色の記録が不正です。');
+  if ((!COLORS.some(([id])=>id===item.colorId) && item.colorId!=='pink') || !/^#[0-9a-f]{6}$/i.test(item.colorHex)) throw new Error('色の記録が不正です。');
   const {totalYen}=totals([item]);
   if (item.lineTotalYen!==totalYen) throw new Error('明細金額が一致しません。');
 }
@@ -113,7 +122,7 @@ export function parseBackup(raw) {
   if (raw.length>20_000_000) throw new Error('バックアップは20MB以内にしてください。');
   const data=JSON.parse(raw);
   if (data.format!=='book-flea-register' || data.version!==1) throw new Error('対応するバックアップではありません。');
-  return validateState(data.state);
+  return validateState(migrateMarkers(data.state));
 }
 export function backupJSON(state) {return JSON.stringify({format:'book-flea-register',version:1,exportedAt:new Date().toISOString(),state},null,2);}
 function csvCell(value) {

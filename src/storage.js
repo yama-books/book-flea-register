@@ -1,4 +1,4 @@
-import {initialState,copy,validateState,addSale} from './calculation.js';
+import {initialState,copy,validateState,addSale,migrateMarkers} from './calculation.js';
 export function openStore(name = 'book-flea-register-v1') {
   return new Promise((resolve,reject)=>{
     if (!globalThis.indexedDB) return reject(new Error('このブラウザでは保存できません。通常のSafariで開いてください。'));
@@ -12,7 +12,7 @@ export function openStore(name = 'book-flea-register-v1') {
 export function readState(db) {
   return new Promise((resolve,reject)=>{
     let state;const tx=db.transaction('register','readonly');
-    tx.objectStore('register').get('state').onsuccess=e=>{state=e.target.result || initialState();};
+    tx.objectStore('register').get('state').onsuccess=e=>{state=migrateMarkers(e.target.result || initialState());};
     tx.oncomplete=()=>{try{resolve(validateState(state));}catch(e){reject(e);}};
     tx.onabort=()=>reject(tx.error || new Error('保存内容を読み込めません。'));
   });
@@ -22,7 +22,7 @@ export function changeState(db,expectedRevision,mutate,{duplicateId} = {}) {
     let result, failure;const tx=db.transaction('register','readwrite'),store=tx.objectStore('register');
     store.get('state').onsuccess=e=>{
       try {
-        const current=e.target.result || initialState();
+        const current=migrateMarkers(e.target.result || initialState());
         if (duplicateId && current.receipts.some(r=>r.id===duplicateId)) {result=current;return;}
         if (current.revision!==expectedRevision) throw new Error('別のタブで更新されました。会計を残したまま最新データを読み直します。内容を確認して再操作してください。');
         result=mutate(copy(current)); result.revision=current.revision+1; validateState(result);store.put(result,'state');
@@ -34,4 +34,4 @@ export function changeState(db,expectedRevision,mutate,{duplicateId} = {}) {
   });
 }
 export function saveSale(db,revision,draft) {return changeState(db,revision,state=>addSale(state,draft),{duplicateId:draft.id});}
-export function restoreState(db,revision,state) {validateState(state);return changeState(db,revision,()=>copy(state));}
+export function restoreState(db,revision,state) {state=migrateMarkers(state);validateState(state);return changeState(db,revision,()=>copy(state));}

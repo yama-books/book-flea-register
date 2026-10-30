@@ -1,0 +1,32 @@
+[
+  {
+    "name": "qrcode-generator",
+    "version": "2.0.4",
+    "registry": "https://registry.npmjs.org/qrcode-generator",
+    "tarball": "https://registry.npmjs.org/qrcode-generator/-/qrcode-generator-2.0.4.tgz",
+    "integrity": "sha512-mZSiP6RnbHl4xL2Ap5HfkjLnmxfKcPWpWe/c+5XxCuetEenqmNFf1FH/ftXPCtFG5/TDobjsjz6sSNL0Sr8Z9g==",
+    "file": "vendor/qrcode.js",
+    "license": "MIT",
+    "sha256": "79ec86f82856005b1c887905cfccfcfbec3821ca61c7fd5a952faa5f778f791c"
+  },
+  {
+    "name": "jsqr",
+    "version": "1.4.0",
+    "registry": "https://registry.npmjs.org/jsqr",
+    "tarball": "https://registry.npmjs.org/jsqr/-/jsqr-1.4.0.tgz",
+    "integrity": "sha512-dxLob7q65Xg2DvstYkRpkYtmKm2sPJ9oFhrhmudT1dZvNFFTlroai3AWSpLey/w5vMcLBXRgOJsbXpdN9HzU/A==",
+    "file": "vendor/jsqr.js",
+    "license": "Apache-2.0",
+    "sha256": "bc40c8a15196236b2314db0856f72ca0b49980cd5413b8c852a7349f5fee0859"
+  },
+  {
+    "name": "fflate",
+    "version": "0.8.3",
+    "registry": "https://registry.npmjs.org/fflate",
+    "tarball": "https://registry.npmjs.org/fflate/-/fflate-0.8.3.tgz",
+    "integrity": "sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==",
+    "file": "vendor/fflate.js",
+    "license": "MIT",
+    "sha256": "462ef8041fc970e3615a20a9dd2b2e3047a073b2da729ef4f02b634bba8b7b83"
+  }
+]

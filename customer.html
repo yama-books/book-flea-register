@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>お会計金額</title><link rel="icon" href="assets/images/cat-face.png"><link rel="stylesheet" href="styles.css"></head>
+<body class="customer-page">
+  <main class="customer-screen">
+    <p id="customer-state" class="customer-state" role="status">レジと接続してください</p>
+    <div class="customer-amount" aria-live="polite"><span id="customer-amount">—</span><span id="customer-yen" hidden>円</span></div>
+    <section id="customer-pairing" class="customer-pairing">
+      <p>レジの「お客さん表示」で作ったQRを、この端末のカメラで読み取ってください。</p>
+      <div class="pair-buttons"><button id="customer-camera" class="primary">レジのQRを読む</button><button id="customer-image-button" class="quiet">QR画像を選ぶ</button></div><input type="file" id="customer-image" accept="image/*" hidden>
+      <video id="customer-video" playsinline muted hidden></video>
+      <details><summary>接続リンク・コードを貼り付ける</summary><label for="customer-code">レジの接続リンク</label><textarea id="customer-code" rows="3" spellcheck="false" autocomplete="off"></textarea><button id="customer-use-code" class="quiet">このコードで接続</button></details>
+      <div id="customer-answer" hidden><h2>このQRをレジで読み取ってください</h2><canvas id="customer-qr" aria-label="レジに返す接続用QRコード"></canvas><p>レジの「返答QRを読む」を押します。接続すると金額表示へ切り替わります。</p><button id="customer-save-qr" class="quiet">QR画像を保存</button><details><summary>返答コードをコピーする</summary><label for="customer-answer-code">レジに返す接続コード</label><textarea id="customer-answer-code" rows="3" readonly spellcheck="false"></textarea></details></div>
+      <p class="mini-note">接続用QRは10分間有効です。同じWi-Fiまたはテザリングを推奨します。端末の時計を自動設定にしてください。</p>
+    </section>
+    <button id="customer-reconnect" class="customer-reconnect quiet" hidden>接続し直す</button>
+    <p id="customer-help" class="mini-note">接続には両端末でページを開いたままにしてください。</p>
+  </main><script type="module" src="src/customer.js"></script>
+</body></html>

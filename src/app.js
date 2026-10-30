@@ -1,5 +1,6 @@
 import {COLORS,copy,initialState,integer,parseMoney,totals,localDate,activeReceipts,salesTotal,validateSettings,voidSale,backupJSON,parseBackup,exportCSV,MAX_QUANTITY} from './calculation.js';
 import {openStore,readState,changeState,saveSale,restoreState} from './storage.js';
+import {setupCustomerControls} from './customer-controls.js';
 const $=s=>document.querySelector(s);
 const yen=n=>new Intl.NumberFormat('ja-JP').format(n)+'円';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -7,6 +8,7 @@ const uid=()=>globalThis.crypto.randomUUID?.() || Array.from(crypto.getRandomVal
 const blank=()=>({id:uid(),items:[],received:'',correctionOfId:null});
 const key=i=>JSON.stringify([i.priceId,i.unitPriceYen,i.colorId,i.genreId,i.genreLabel]);
 let db,state=initialState(),draft=blank(),colorId='red',genreId=null,busy=false,ready=false,editor,historyLimit=20,pendingConfirm;
+const customerDisplay=setupCustomerControls();
 function notify(message,error=false){$('#notice').textContent=message;$('#notice').classList.toggle('error',error);}
 function persistDraft(){try{sessionStorage.setItem('book-flea-register-draft',JSON.stringify(draft));}catch{notify('会計の途中保存が使えません。再読込すると未確定の入力が消えることがあります。',true);}}
 function recoverDraft(){try{const data=JSON.parse(sessionStorage.getItem('book-flea-register-draft'));if(data && typeof data.id==='string' && Array.isArray(data.items) && typeof data.received==='string'){totals(data.items);draft=data;}}catch{notify('途中の会計を復元できませんでした。未確定の入力をご確認ください。',true);}}
@@ -16,17 +18,18 @@ function selectedItem(){
   return {priceId:p.id,unitPriceYen:p.amountYen,colorId:c.id,colorLabel:c.label,colorHex:c.hex,genreId:g?.id??null,genreLabel:g?.label??'未分類',quantity:1,lineTotalYen:p.amountYen};
 }
 function renderColors(){
-  $('#colors').innerHTML=state.settings.colors.map(c=>{const p=state.settings.prices.find(p=>p.id===c.priceId);return `<button class="color-choice${c.id===colorId?' is-current':''}" data-color="${esc(c.id)}" aria-label="${esc(c.label)} ${p?yen(p.amountYen)+'の本を1冊追加':'価格未設定'}" ${!ready||busy||!p?'disabled':''}><span class="swatch" style="background:${c.hex}"></span><span class="color-name">${c.label}</span><span class="color-price">${p?yen(p.amountYen):'未設定'}</span></button>`;}).join('');
+  $('#colors').innerHTML=state.settings.colors.map(c=>{const p=state.settings.prices.find(p=>p.id===c.priceId);return `<button class="color-choice${c.id===colorId?' is-current':''}" data-color="${esc(c.id)}" aria-label="${esc(c.label)} ${p?yen(p.amountYen)+'の本を1冊追加':'価格未設定'}" ${!ready||busy||!p?'disabled':''}><span class="swatch${c.id==='so'?' so-mark':''}" style="background:${c.hex}" aria-hidden="true">${c.id==='so'?'そ':''}</span><span class="color-name">${c.label}</span><span class="color-price">${p?yen(p.amountYen):'未設定'}</span></button>`;}).join('');
   $('#genres').innerHTML=[{id:'',label:'未分類'},...state.settings.genres].map(g=>`<button data-genre="${g.id}" aria-pressed="${g.id===(genreId??'')}" ${busy?'disabled':''}>${g.label}</button>`).join('');
   $('#selected-genre').textContent=state.settings.genres.find(g=>g.id===genreId)?.label??'未分類';
 }
 function renderCart(){
   let t;try{t=totals(draft.items);}catch(e){notify(e.message,true);return;}
   $('#total').innerHTML=`${new Intl.NumberFormat('ja-JP').format(t.totalYen)}<span>円</span>`;$('#count').textContent=t.quantityTotal;
-  $('#draft-label').textContent=draft.correctionOfId?'履歴を残して、この会計を訂正中':'色をタップして1冊追加';
+  customerDisplay.publish(t.totalYen);
+  $('#draft-label').textContent=draft.correctionOfId?'履歴を残して、この会計を訂正中':'マークをタップして1冊追加';
   const item=selectedItem(),qty=item?draft.items.find(i=>key(i)===key(item))?.quantity??0:0;
-  $('#quantity-picker').innerHTML=`<div class="quantity-label">${item?`${yen(item.unitPriceYen)}の本 × ${qty}冊`:'最初に色と価格を設定'}<small>${item?`${esc(item.colorLabel)} · ${esc(item.genreLabel)}`:'設定から6色の価格を選べます'}</small></div><div class="stepper"><button data-step="-1" aria-label="選択した本を1冊減らす" ${!item||!qty||busy||!ready?'disabled':''}>−</button><strong>${qty}</strong><button data-step="1" aria-label="選択した本を1冊増やす" ${!item||busy||!ready||qty>=MAX_QUANTITY?'disabled':''}>＋</button></div>`;
-  $('#cart').innerHTML=draft.items.length?draft.items.map((i,n)=>`<div class="cart-row"><div class="cart-description"><span class="swatch" style="background:${esc(i.colorHex)}"></span>${esc(i.colorLabel)} · ${yen(i.unitPriceYen)} × ${i.quantity}冊<small>${esc(i.genreLabel)} · ${yen(i.lineTotalYen)}</small></div><div class="cart-stepper"><button data-row="${n}" data-delta="-1" aria-label="明細${n+1}を1冊減らす" ${busy?'disabled':''}>−</button><button data-row="${n}" data-delta="1" aria-label="明細${n+1}を1冊増やす" ${busy||i.quantity>=MAX_QUANTITY?'disabled':''}>＋</button></div></div>`).join(''):'<p class="cart-empty">値札の色をタップすると、1冊追加されます。</p>';
+  $('#quantity-picker').innerHTML=`<div class="quantity-label">${item?`${yen(item.unitPriceYen)}の本 × ${qty}冊`:'最初にマークと価格を設定'}<small>${item?`${esc(item.colorLabel)} · ${esc(item.genreLabel)}`:'設定から6種類のマークの価格を選べます'}</small></div><div class="stepper"><button data-step="-1" aria-label="選択した本を1冊減らす" ${!item||!qty||busy||!ready?'disabled':''}>−</button><strong>${qty}</strong><button data-step="1" aria-label="選択した本を1冊増やす" ${!item||busy||!ready||qty>=MAX_QUANTITY?'disabled':''}>＋</button></div>`;
+  $('#cart').innerHTML=draft.items.length?draft.items.map((i,n)=>`<div class="cart-row"><div class="cart-description"><span class="swatch" style="background:${esc(i.colorHex)}"></span>${esc(i.colorLabel)} · ${yen(i.unitPriceYen)} × ${i.quantity}冊<small>${esc(i.genreLabel)} · ${yen(i.lineTotalYen)}</small></div><div class="cart-stepper"><button data-row="${n}" data-delta="-1" aria-label="明細${n+1}を1冊減らす" ${busy?'disabled':''}>−</button><button data-row="${n}" data-delta="1" aria-label="明細${n+1}を1冊増やす" ${busy||i.quantity>=MAX_QUANTITY?'disabled':''}>＋</button></div></div>`).join(''):'<p class="cart-empty">値札のマークをタップすると、1冊追加されます。</p>';
   const counts=new Map();for(const i of draft.items)counts.set(i.unitPriceYen,(counts.get(i.unitPriceYen)??0)+i.quantity);
   $('#price-summary').textContent=[...counts].sort((a,b)=>a[0]-b[0]).map(([p,q])=>`${yen(p)} × ${q}冊`).join('　/　');
   $('#received').value=draft.received;$('#received').disabled=busy||!ready;
@@ -98,19 +101,19 @@ function download(content,type,name){
 function saveBackup(){download(backupJSON(state),'application/json',`古本フリマレジ-backup-${localDate()}-${Date.now()}.json`);}
 function renderEditor(){
   $('#price-editor').innerHTML=editor.prices.map((p,i)=>`<div class="price-editor-row"><input type="number" min="1" max="1000000" step="1" inputmode="numeric" data-price="${i}" aria-label="価格${i+1}" value="${p.amountYen}"><span>円</span><button type="button" data-move="${i}" data-direction="-1" aria-label="価格${i+1}を上へ" ${i===0?'disabled':''}>↑</button><button type="button" data-move="${i}" data-direction="1" aria-label="価格${i+1}を下へ" ${i===editor.prices.length-1?'disabled':''}>↓</button><button type="button" class="remove-price" data-remove="${i}" ${editor.prices.length===1?'disabled':''}>削除</button></div>`).join('');
-  $('#mapping-editor').innerHTML=editor.colors.map(c=>`<label><span class="swatch" style="background:${c.hex}"></span>${c.label}<select data-mapping="${c.id}" aria-label="${c.label}の価格"><option value="">価格を選択</option>${editor.prices.map(p=>`<option value="${esc(p.id)}" ${c.priceId===p.id?'selected':''}>${yen(p.amountYen)}</option>`).join('')}</select></label>`).join('');
+  $('#mapping-editor').innerHTML=editor.colors.map(c=>`<label><span class="swatch${c.id==='so'?' so-mark':''}" style="background:${c.hex}" aria-hidden="true">${c.id==='so'?'そ':''}</span>${c.label}<select data-mapping="${c.id}" aria-label="${c.label}の価格"><option value="">価格を選択</option>${editor.prices.map(p=>`<option value="${esc(p.id)}" ${c.priceId===p.id?'selected':''}>${yen(p.amountYen)}</option>`).join('')}</select></label>`).join('');
 }
 function openSettings(){
   if(busy||!ready)return;
-  if(draft.items.length||draft.correctionOfId){notify('設定を変える前に、会計を完了するか「やり直す」で会計を空にしてください。',true);return;}
-  editor=copy(state.settings);$('#setup-help').textContent=state.settings.initialized?'価格を変更しても、過去の売上は変わりません。':'最初に、6色の値札と価格を対応させてください。';$('#settings-error').textContent='';renderEditor();$('#settings-dialog').showModal();
+  if(state.settings.initialized&&(draft.items.length||draft.correctionOfId)){notify('設定を変える前に、会計を完了するか「やり直す」で会計を空にしてください。',true);return;}
+  editor=copy(state.settings);$('#setup-help').textContent=state.settings.initialized?'価格を変更しても、過去の売上は変わりません。':'最初に、6種類のマークの値札と価格を対応させてください。';$('#settings-error').textContent='';renderEditor();$('#settings-dialog').showModal();
 }
 async function submitSettings(e){
   e.preventDefault();if(busy)return;
   try{
     const settings=copy(editor);settings.initialized=true;validateSettings(settings);
     busy=true;$('#settings-form button[type=submit]').disabled=true;
-    state=await changeState(db,state.revision,s=>{s.settings=settings;return s;});$('#settings-dialog').close();notify('設定を保存しました。色をタップしてお会計をはじめましょう。');broadcast();
+    state=await changeState(db,state.revision,s=>{s.settings=settings;return s;});$('#settings-dialog').close();notify('設定を保存しました。マークをタップしてお会計をはじめましょう。');broadcast();
   }catch(error){$('#settings-error').textContent=error.message;try{state=await readState(db);}catch{}}
   finally{busy=false;$('#settings-form button[type=submit]').disabled=false;render();}
 }
@@ -174,7 +177,7 @@ window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnV
 async function init(){
   render();try{db=await openStore();state=await readState(db);recoverDraft();
     if(state.receipts.some(r=>r.id===draft.id)){draft=blank();persistDraft();}
-    ready=true;render();notify(draft.items.length?'途中のお会計を復元しました。内容をご確認ください。':state.settings.initialized?'色をタップすると、1冊追加されます。':'最初に「設定」で、色と価格を対応させてください。');
+    ready=true;render();notify(draft.items.length?'途中のお会計を復元しました。内容をご確認ください。':state.settings.initialized?'マークをタップすると、1冊追加されます。':'最初に「設定」で、マークと価格を対応させてください。');
     if(!state.settings.initialized)openSettings();
   }catch(e){notify(e.message,true);render();}
 }
