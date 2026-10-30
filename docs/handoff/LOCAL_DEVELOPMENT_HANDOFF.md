@@ -1,14 +1,14 @@
 # ローカル開発引継ぎ
 
-2026-10-30 JST。作業先はこのフォルダ。アプリ本体は未実装。資料と画像を準備するセッションからの引継ぎ。
+2026-10-30 JST。初期版を実装済み。作業先はこのフォルダ。公開先は `https://yama-books.github.io/book-flea-register/`。検証範囲はdocs/VALIDATION.mdを参照。iPad Safari実機検収は未実施。
 
 ## 最初にすること
 
 1. README → AGENTS → REQUIREMENTS → UI_DESIGN → ASSET_INVENTORYを読む。
 2. 添付元画像 `assets/reference/pixel-ui-model.png` と切り出しを確認する。
-3. `index.html`、`styles.css`、`src/calculation.js`、`src/storage.js`、`src/app.js`を必要最小限で実装する。現時点でこれらは存在しない。不要なビルド環境やフレームワークを導入しない。
-4. 色価格初回設定と会計計算を先に動かし、次に保存と履歴・取消、最後に設定・出力を仕上げる。
-5. 純粋計算と保存エラー/重複/取消差替のチェックを実行し、iPad Safariの実機検収は別途記録する。
+3. `index.html`、`styles.css`、`src/calculation.js`、`src/storage.js`、`src/app.js`が本体。計算・永続化・UIを分離している。不要なビルド環境やフレームワークを導入しない。
+4. `npm test`と`npm run check`、tests/browser.htmlの保存テストで変更を確認する。
+5. 次の優先作業は実機Safariでキーボード・ダウンロード・再起動後保存を確認すること。実機検収結果を別途記録する。
 
 ## デザインの優先順位
 
@@ -21,7 +21,7 @@
 - 正常なyama-books本人認証でのみ新規作成。Factoryのowner固定、Secret、承認ラベルは変更しない。別アカウントへ作らない。
 - GitHubに保存する際は公開可能な資料とassetsだけを選ぶ。認証診断・ローカルログ・バックアップ・実売上を混ぜない。
 - 既存履歴を上書きせずcommitし、push後はGitHubから全保存ファイルを読戻してSHAと照合する。サイト配信は別工程。
-- 初期資料の保存コミットはGitHubの履歴を参照。APP-ID、台帳登録、Pages公開、実機検証は未実施。
+- 保存コミットとPages配信履歴はGitHubを参照。APP-ID、台帳登録、実機Safari検証は未実施。
 
 ## 未確定事項
 
@@ -29,4 +29,4 @@
 
 ## 次のセッションへそのまま渡す文
 
-> yama-books/book-flea-registerの最新mainを確認して、古本フリマレジを実装してください。README、AGENTS.md、docs/REQUIREMENTS.md、docs/UI_DESIGN.md、docs/ASSET_INVENTORY.mdを先に読み、モデル画像と切り出しPNGを使って、シンプルでかわいいiPad Safari用の静的Webアプリを作ってください。ネコや本のSVG描き直しはせず、不足する操作アイコンだけSVG可。初期価格は100/200/400円、6色との対応は初回設定。色と分類は独立、複数単価と数量に対応し、合計・預り・釣りを表示。「完了」1回で安全に自動保存し、成功後だけ次会計へ移ります。保存失敗・重複・設定変更による過去履歴改変を防ぎ、確認付き取消/訂正、補助的な売上履歴・集計・CSV・JSONバックアップを実装してください。ISBN、ログイン、クラウド、在庫、決済は追加不要。実際の計算/保存テストを行い、実機未検証を明記してください。GitHubはyama-books/book-flea-register Publicのみを使い、資料と実装を保存・読戻ししてください。現在アプリ本体は未実装です。
+> yama-books/book-flea-registerの最新mainとREADME、AGENTS.md、docs/REQUIREMENTS.md、docs/UI_DESIGN.md、docs/VALIDATION.mdを読んで初期版を引き継いでください。モデル画像由来のPNGとシンプルな会計中心UIを維持し、ネコのSVG描き直しや不要な機能追加は行わないでください。計算はsrc/calculation.js、IndexedDB保存はsrc/storage.js、操作はsrc/app.jsです。初期価格100/200/400円、色価格は初回設定、「完了」で保存成功後のみ次会計へ進む設計を守ってください。まずiPad Safari実機で数字キーボード・CSV/JSON保存・再起動後の履歴・横縦画面を確認し、結果に基づいて必要な修正を行ってください。GitHubと公開先の保存内容を読戻し、売上やバックアップをリポジトリへ入れないでください。
