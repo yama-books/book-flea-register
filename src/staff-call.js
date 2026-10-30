@@ -32,22 +32,25 @@ export function setupStaffCall({isPractice}){
     const settings=getSettings();$('#call-dialog').showModal();
     $('#call-mode').textContent=isPractice()?'練習モードです。実際にはメールを送りません。':'入力した要件を山本へメールで送ります。';
     $('#call-submit').textContent=isPractice()?'呼出を練習する':'山本を呼ぶ（メール送信）';
-    $('#call-status').textContent=settings?.shared?'図書館受付と共通の端末の合言葉を使用します。':settings?'':isPractice()?'':'合言葉がまだ設定されていません。';
-    $('#call-key').value=settings?.key||'';$('#call-settings').open=!settings&&!isPractice();
+    $('#call-status').textContent=settings?.shared?'共通の合言葉を使用します。':settings?'':isPractice()?'':'合言葉が未設定です。「設定」→「メール通知」で入力してください。';
   };
   $('#close-call').onclick=()=>{if(!sending)$('#call-dialog').close();};
   $('#call-dialog').addEventListener('cancel',e=>{if(sending)e.preventDefault();});
+  // The existing register Settings dialog owns the passcode input.
+  $('#open-settings').addEventListener('click',()=>{const settings=getSettings();$('#call-key').value='';$('#call-settings-status').textContent=settings?'合言葉は設定済みです。変更する場合は新しい合言葉を入力してください。':'合言葉がまだ設定されていません。';});
   $('#call-settings-form').onsubmit=e=>{
     e.preventDefault();try{
       if(isPractice())throw new Error('送信設定は本番モードで変更してください。');
       const settings=validateCallSettings({key:$('#call-key').value});
       localStorage.setItem(ownKey,JSON.stringify({key:settings.key}));
-      $('#call-settings').open=false;$('#call-status').textContent='この端末に合言葉を保存しました。';
-    }catch(error){$('#call-status').textContent=error.message;}
+      $('#call-key').value='';$('#call-settings-status').textContent='この端末に合言葉を保存しました。';
+    }catch(error){$('#call-settings-status').textContent=error.message;}
   };
   $('#call-form').onsubmit=async e=>{
     e.preventDefault();if(sending)return;
-    const practice=isPractice();sending=true;$('#call-submit').disabled=true;$('#close-call').disabled=true;$('#call-status').textContent=practice?'練習しています…':'送信中…';
+    const practice=isPractice();
+    if(!practice&&!getSettings()){$('#call-status').textContent='合言葉が未設定です。「設定」→「メール通知」で保存してください。要件は残っています。';return;}
+    sending=true;$('#call-submit').disabled=true;$('#close-call').disabled=true;$('#call-status').textContent=practice?'練習しています…':'送信中…';
     try{
       await sendStaffCall(getSettings(),$('#call-input').value,{practice});
       $('#call-input').value='';$('#call-status').textContent=practice?'呼出の練習ができました。メールは送っていません。':'送信しました。';
