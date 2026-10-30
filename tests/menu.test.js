@@ -58,5 +58,8 @@ test('GASひな形は合言葉・連打・日次上限を確認してから模�
   assert.equal(request('wrong').ok,false);assert.equal(sent,0);
   assert.equal(request('test-only').ok,true);assert.equal(sent,1);assert.equal(mail.subject,'【古本市レジより】山本を呼ぶ');
   assert.equal(request('test-only').ok,false);assert.equal(sent,1);
-  cache.clear();props.set('CALL_COUNT','50');assert.equal(request('test-only').ok,false);assert.equal(sent,1);
+  cache.clear();
+  assert.equal(context.doPost({postData:{contents:JSON.stringify({key:'test-only',text:'受付に来て',staff:'受付係',source:'library'})}}).ok,true);
+  assert.equal(mail.subject,'【図書館受付より】山本を呼ぶ');assert.equal(sent,2);
+  cache.clear();props.set('CALL_COUNT','50');assert.equal(request('test-only').ok,false);assert.equal(sent,2);
 });
