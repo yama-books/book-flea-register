@@ -47,7 +47,8 @@
       <section class="panel sales-panel" aria-labelledby="today-title">
         <div class="panel-heading blue"><h2 id="today-title">きょうの売上</h2><span id="today-date"></span></div>
         <div class="panel-body sales-body">
-          <div class="sales-summary"><div class="today-total" id="today-total">0 <span>円</span></div><p id="today-count" class="muted">0点 · 0回のお会計</p><div id="last-action"></div><details id="summary-details" class="summary-details"><summary>きょうの内訳を見る</summary><label class="summary-picker" for="summary-mode">表示<select id="summary-mode"><option value="category">分類別（円グラフ）</option><option value="hourly">時間帯別（1時間ごと）</option></select></label><div id="summaries"></div></details><div class="export-actions"><button id="csv" class="quiet">CSVで保存</button><button id="backup" class="quiet">バックアップ</button></div><p class="mini-note">CSVの集計は「有効」の明細金額を合計。バックアップは復元用JSONです。</p></div>
+          <div class="sales-summary"><p class="sales-kicker">合計</p><div class="today-total" id="today-total">0 <span>円</span></div><p id="today-count" class="muted">0点 · 0回のお会計</p><div id="last-action"></div><div class="export-actions"><button id="csv" class="quiet">CSVで保存</button><button id="backup" class="quiet">バックアップ</button></div><p class="mini-note">CSVの集計は「有効」の明細金額を合計。バックアップは復元用JSONです。</p></div>
+          <section class="sales-breakdown" aria-labelledby="breakdown-title"><div class="breakdown-heading"><h3 id="breakdown-title">内訳</h3><label class="summary-picker" for="summary-mode"><span class="visually-hidden">内訳の表示</span><select id="summary-mode"><option value="category">分類別（円グラフ）</option><option value="hourly">時間帯別（1時間ごと）</option></select></label></div><div id="summaries"></div></section>
           <div class="sales-history"><h3 id="history-title">売上の記録 <span class="muted">端末内に保存</span></h3><div id="history" class="history"></div><button id="more-history" class="quiet" hidden>さらに20件</button></div>
         </div>
       </section>

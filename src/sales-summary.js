@@ -1,5 +1,8 @@
 import {activeReceipts,integer,localDate} from './calculation.js';
 const palette=['#cf5361','#d7ac32','#398c71','#538ebd','#9463af','#d07b3d','#697782'];
+// 白い値札はグラフ内だけ色を分ける。値札の設定・履歴は変えない。
+const whiteMarkColors={white:'#8196a8',so:'#9b70b8',cd:'#d68b45'};
+function chartColor(item,index){return whiteMarkColors[item.colorId]||(/^#[0-9a-f]{6}$/i.test(item.colorHex)&&item.colorHex.toLowerCase()!=='#ffffff'?item.colorHex:palette[index%palette.length]);}
 // 履歴の確定時ラベルで分類する。現在の設定を引かず、取消は除く。
 export function salesSummary(state,date=localDate()){
   const categories=new Map(),hours=new Map();let totalYen=0;
@@ -9,7 +12,7 @@ export function salesSummary(state,date=localDate()){
     period.amountYen=integer(period.amountYen+receipt.totalYen,0,Number.MAX_SAFE_INTEGER);period.quantity+=receipt.quantityTotal;period.receipts++;hours.set(hour,period);
     for(const item of receipt.items){
       const name=item.genreLabel?.trim()||'未分類';
-      const group=categories.get(name)||{name,amountYen:0,quantity:0,color:/^#[0-9a-f]{6}$/i.test(item.colorHex)?item.colorHex:palette[categories.size%palette.length]};
+      const group=categories.get(name)||{name,amountYen:0,quantity:0,color:chartColor(item,categories.size)};
       group.amountYen=integer(group.amountYen+item.lineTotalYen,0,Number.MAX_SAFE_INTEGER);group.quantity+=item.quantity;categories.set(name,group);
     }
     totalYen=integer(totalYen+receipt.totalYen,0,Number.MAX_SAFE_INTEGER);

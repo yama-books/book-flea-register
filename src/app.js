@@ -5,6 +5,7 @@ import {openPractice,draftKey,practiceBackup} from './practice.js';
 import {setupStaffCall} from './staff-call.js';
 import {setupFullscreen} from './menu.js';
 import {salesSummary,pieGradient} from './sales-summary.js';
+import {animatePie} from './chart-motion.js';
 const $=s=>document.querySelector(s);
 const yen=n=>new Intl.NumberFormat('ja-JP').format(n)+'円';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -12,6 +13,7 @@ const uid=()=>globalThis.crypto.randomUUID?.() || Array.from(crypto.getRandomVal
 const blank=()=>({id:uid(),items:[],received:'',correctionOfId:null});
 const key=i=>JSON.stringify([i.priceId,i.unitPriceYen,i.colorId,i.genreId,i.genreLabel]);
 let db,liveDb,practiceDb,practice=false,state=initialState(),draft=blank(),busy=false,ready=false,editor,historyLimit=20,pendingConfirm,lastSale=null;
+let stopPieMotion=()=>{};
 const customerDisplay=setupCustomerControls();
 setupStaffCall({isPractice:()=>practice});setupFullscreen();
 function notify(message,error=false){$('#notice').textContent=(practice?'【練習】':'')+message;$('#notice').classList.toggle('error',error);}
@@ -85,6 +87,7 @@ function renderHistory(){
   $('#csv').disabled=busy||!ready;$('#backup').disabled=busy||!ready;
 }
 function renderSummary(date=localDate()){
+  stopPieMotion();stopPieMotion=()=>{};
   const data=salesSummary(state,date),target=$('#summaries');
   if(!data.totalYen){target.innerHTML='<p class="summary-empty">まだ記録はありません。会計を保存すると表示します。</p>';return;}
   if($('#summary-mode').value==='hourly'){
@@ -95,6 +98,7 @@ function renderSummary(date=localDate()){
   const description=data.categories.map(g=>`${g.name} ${yen(g.amountYen)}`).join('、');
   target.innerHTML=`<h4>分類別の売上金額</h4><div class="category-chart"><div id="sales-pie" class="sales-pie" role="img" aria-label="${esc(description)}"></div><div class="chart-legend">${data.categories.map(g=>`<div class="legend-row"><span class="legend-dot" style="background:${g.color}" aria-hidden="true"></span><span>${esc(g.name)}<small>${g.quantity}点 · ${(g.amountYen/data.totalYen*100).toFixed(1)}%</small></span><strong>${yen(g.amountYen)}</strong></div>`).join('')}</div></div>`;
   $('#sales-pie').style.background=pieGradient(data.categories);
+  stopPieMotion=animatePie($('#sales-pie'));
 }
 $('#summary-mode').addEventListener('change',()=>renderSummary());
 function render(){

@@ -105,9 +105,6 @@ main{display:flex;flex-direction:column;gap:18px}
 .history-item button{min-height:44px;padding:5px 12px;font-size:.75rem;margin:5px 8px 0 0;border-color:#c6d1c7;box-shadow:none}
 .voided{opacity:.65}
 .void-badge{color:var(--danger);font-size:.65rem}
-.summary-details{border-top:1px solid #dbe2d8;margin-top:14px;padding-top:6px;font-size:.8rem}
-.summary-group h4{font-size:.76rem;color:var(--muted);margin:12px 0 6px}
-.summary-group p{display:flex;justify-content:space-between;font-size:.75rem;margin:5px 0;gap:8px}
 .export-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .export-actions button{flex:1;font-size:.78rem;padding:8px}
 footer{font-size:.68rem;color:var(--muted);margin-top:18px;line-height:1.9;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
@@ -245,3 +242,28 @@ textarea{display:block;width:100%;resize:vertical;font:12px/1.5 ui-monospace,mon
 .hour-track>div{height:100%;background:var(--green);min-width:0}
 .hour-row small{grid-column:2/-1;color:var(--muted);font-size:.66rem}
 @media(max-width:560px){.category-chart{grid-template-columns:110px minmax(0,1fr);gap:12px}.app-header{gap:8px}.header-actions{gap:5px}.header-actions button{padding:8px 9px}}
+
+/* 内訳を常時表示する売上パネル。左: 合計、中央: 内訳、右: 履歴。 */
+.sales-body{grid-template-columns:minmax(180px,.7fr) minmax(0,1.4fr) minmax(220px,1fr);gap:22px;align-items:start}
+.sales-kicker{margin:0 0 4px;font-size:.8rem;font-weight:700;color:var(--muted)}
+.sales-breakdown{min-width:0;border-left:1px solid var(--line);border-right:1px solid var(--line);padding:0 20px}
+.breakdown-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.breakdown-heading h3{margin:0;font-size:.95rem}
+.breakdown-heading .summary-picker{margin:0;flex:1;max-width:210px}
+.breakdown-heading select{width:100%;min-height:44px;background:#fff;font-size:.75rem}
+.category-chart{grid-template-columns:minmax(110px,155px) minmax(0,1fr)}
+.sales-history{min-width:0}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@keyframes pie-turn{0%{transform:rotate(-360deg) scale(.88);opacity:0}15%{opacity:1}100%{transform:rotate(0deg) scale(1);opacity:1}}
+@media(prefers-reduced-motion:no-preference){.sales-pie.pie-spinning{animation:pie-turn 1s cubic-bezier(.22,.7,.25,1) both}}
+@media(max-width:1000px){
+  .sales-body{grid-template-columns:minmax(180px,.75fr) minmax(0,1.4fr)}
+  .sales-breakdown{border-right:0;padding-right:0}
+  .sales-history{grid-column:1/-1;border-top:1px solid var(--line);padding-top:16px}
+}
+@media(max-width:620px){
+  .sales-body{grid-template-columns:1fr;gap:18px}
+  .sales-breakdown{border:0;border-top:1px solid var(--line);padding:16px 0 0}
+  .sales-history{grid-column:auto}
+  .category-chart{grid-template-columns:125px minmax(0,1fr)}
+}
