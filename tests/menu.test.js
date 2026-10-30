@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {toggleFullscreen} from '../src/menu.js';
-import {validateCallSettings,readCallSettings,sendStaffCall} from '../src/staff-call.js';
+import {validateCallSettings,readCallSettings,sendStaffCall,parseCallConfigFile,makeCallConfigFile} from '../src/staff-call.js';
 import {practiceBackup,draftKey} from '../src/practice.js';
 import {initialState,parseBackup} from '../src/calculation.js';
 test('練習の途中会計とバックアップを本番として読み込まない',()=>{
@@ -28,6 +28,11 @@ test('送信設定は正規のGAS URLだけを受け付け、共通端末設定�
   assert.deepEqual(readCallSettings(storage),{...config,shared:true});
   assert.equal(readCallSettings({getItem:()=>'{bad'}),null);
 });
+test('共通設定ファイルは両アプリ共通の形式で読み書きし、不正形式を拒否する',()=>{
+  assert.deepEqual(parseCallConfigFile(makeCallConfigFile(config)),config);
+  assert.throws(()=>parseCallConfigFile('{"format":"wrong","version":1}'));
+  assert.throws(()=>parseCallConfigFile('{"format":"staff-call-config","version":1,"url":"https://evil.example/","key":"x"}'));
+});
 test('練習の呼出は設定不要で、送信を一度も実行しない',async()=>{
   let calls=0;assert.deepEqual(await sendStaffCall(null,'練習',{practice:true,fetcher:()=>{calls++;throw new Error();}}),{demo:true});assert.equal(calls,0);
   await assert.rejects(sendStaffCall(config,' '.repeat(4),{practice:true}),/1〜500文字/);
@@ -37,7 +42,7 @@ test('呼出APIの契約どおり送信し、成功応答以外は成功と扱�
   let sent;
   const result=await sendStaffCall(config,' 本を運んでください ',{fetcher:async(url,options)=>{sent={url,options};return {ok:true,json:async()=>({ok:true})};}});
   assert.deepEqual(result,{demo:false});assert.equal(sent.url,config.url);assert.equal(sent.options.method,'POST');assert.match(sent.options.headers['Content-Type'],/^text\/plain/);
-  const body=JSON.parse(sent.options.body);assert.equal(body.text,'本を運んでください');assert.equal(body.staff,'古本フリマレジ');assert.equal(body.key,config.key);
+  const body=JSON.parse(sent.options.body);assert.equal(body.text,'本を運んでください');assert.equal(body.staff,'古本フリマレジ');assert.equal(body.source,'book-sale');assert.equal(body.key,config.key);
   for(const response of [{ok:true,json:async()=>({ok:false,error:'上限です'})},{ok:false,json:async()=>({ok:true})},{ok:true,json:async()=>({})}])await assert.rejects(sendStaffCall(config,'呼出',{fetcher:async()=>response}));
 });
 test('呼出はタイムアウトしても自動再送しない',async()=>{
@@ -46,12 +51,12 @@ test('呼出はタイムアウトしても自動再送しない',async()=>{
   assert.equal(calls,1);
 });
 test('GASひな形は合言葉・連打・日次上限を確認してから模擬メールを送る',()=>{
-  const props=new Map([['RECIPIENT','recipient@example.invalid'],['PASSCODE','test-only']]),cache=new Map();let sent=0;
-  const context=vm.createContext({PropertiesService:{getScriptProperties:()=>({getProperty:k=>props.get(k),setProperties:values=>Object.entries(values).forEach(([k,v])=>props.set(k,v))})},CacheService:{getScriptCache:()=>({get:k=>cache.get(k),put:(k,v)=>cache.set(k,v)})},LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock(){}})},Utilities:{formatDate:()=> '2026-10-30'},MailApp:{sendEmail:()=>sent++},ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({setMimeType:()=>JSON.parse(text)})}});
+  const props=new Map([['RECIPIENT','recipient@example.invalid'],['PASSCODE','test-only']]),cache=new Map();let sent=0,mail;
+  const context=vm.createContext({PropertiesService:{getScriptProperties:()=>({getProperty:k=>props.get(k),setProperties:values=>Object.entries(values).forEach(([k,v])=>props.set(k,v))})},CacheService:{getScriptCache:()=>({get:k=>cache.get(k),put:(k,v)=>cache.set(k,v)})},LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock(){}})},Utilities:{formatDate:()=> '2026-10-30'},MailApp:{sendEmail:arg=>{mail=arg;sent++;}},ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({setMimeType:()=>JSON.parse(text)})}});
   vm.runInContext(fs.readFileSync(new URL('../gas/call-staff.gs',import.meta.url),'utf-8'),context);
   const request=key=>context.doPost({postData:{contents:JSON.stringify({key,text:'テスト',staff:'古本フリマレジ'})}});
   assert.equal(request('wrong').ok,false);assert.equal(sent,0);
-  assert.equal(request('test-only').ok,true);assert.equal(sent,1);
+  assert.equal(request('test-only').ok,true);assert.equal(sent,1);assert.equal(mail.subject,'【古本市レジより】山本を呼ぶ');
   assert.equal(request('test-only').ok,false);assert.equal(sent,1);
   cache.clear();props.set('CALL_COUNT','50');assert.equal(request('test-only').ok,false);assert.equal(sent,1);
 });
