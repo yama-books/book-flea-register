@@ -1,17 +1,21 @@
 import {COLORS,copy,initialState,integer,parseMoney,totals,localDate,activeReceipts,salesTotal,validateSettings,voidSale,backupJSON,parseBackup,exportCSV,categoryOf,tenderCandidates,MAX_QUANTITY,MAX_CATEGORY} from './calculation.js';
 import {openStore,readState,changeState,saveSale,restoreState} from './storage.js';
 import {setupCustomerControls} from './customer-controls.js';
+import {openPractice,draftKey,practiceBackup} from './practice.js';
+import {setupStaffCall} from './staff-call.js';
+import {setupFullscreen} from './menu.js';
 const $=s=>document.querySelector(s);
 const yen=n=>new Intl.NumberFormat('ja-JP').format(n)+'円';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>globalThis.crypto.randomUUID?.() || Array.from(crypto.getRandomValues(new Uint32Array(4)),x=>x.toString(16)).join('-');
 const blank=()=>({id:uid(),items:[],received:'',correctionOfId:null});
 const key=i=>JSON.stringify([i.priceId,i.unitPriceYen,i.colorId,i.genreId,i.genreLabel]);
-let db,state=initialState(),draft=blank(),busy=false,ready=false,editor,historyLimit=20,pendingConfirm,lastSale=null;
+let db,liveDb,practiceDb,practice=false,state=initialState(),draft=blank(),busy=false,ready=false,editor,historyLimit=20,pendingConfirm,lastSale=null;
 const customerDisplay=setupCustomerControls();
-function notify(message,error=false){$('#notice').textContent=message;$('#notice').classList.toggle('error',error);}
-function persistDraft(){try{sessionStorage.setItem('book-flea-register-draft',JSON.stringify(draft));}catch{notify('会計の途中保存が使えません。再読込すると未確定の入力が消えることがあります。',true);}}
-function recoverDraft(){try{const data=JSON.parse(sessionStorage.getItem('book-flea-register-draft'));if(data && typeof data.id==='string' && Array.isArray(data.items) && typeof data.received==='string'){totals(data.items);draft=data;}}catch{notify('途中の会計を復元できませんでした。未確定の入力をご確認ください。',true);}}
+setupStaffCall({isPractice:()=>practice});setupFullscreen();
+function notify(message,error=false){$('#notice').textContent=(practice?'【練習】':'')+message;$('#notice').classList.toggle('error',error);}
+function persistDraft(){try{sessionStorage.setItem(draftKey(practice),JSON.stringify(draft));}catch{notify('会計の途中保存が使えません。再読込すると未確定の入力が消えることがあります。',true);}}
+function recoverDraft(){try{const data=JSON.parse(sessionStorage.getItem(draftKey(practice)));if(data && typeof data.id==='string' && Array.isArray(data.items) && typeof data.received==='string'){totals(data.items);draft=data;}}catch{notify('途中の会計を復元できませんでした。未確定の入力をご確認ください。',true);}}
 // 分類名は確定時のsnapshotとして明細へ残すが、レジ画面には表示しない。
 function itemFor(colorId){
   const c=state.settings.colors.find(x=>x.id===colorId),p=state.settings.prices.find(x=>x.id===c?.priceId);
@@ -58,10 +62,11 @@ function renderPayment(){
   $('#payment-hint').textContent=error || (draft.correctionOfId?'元の会計を取消し、この内容へ差し替えます':'内容を確認して「完了」を押してください');
   $('#payment-hint').classList.toggle('short',received!==null&&received<totalYen&&Boolean(draft.items.length));
   $('#complete').disabled=Boolean(error)||busy||!ready||!state.settings.initialized;
-  $('#complete').innerHTML=busy?'保存しています…':`${draft.correctionOfId?'訂正を完了':'完了'} <span>会計を保存して、次のお客さんへ</span>`;
+  $('#complete').innerHTML=busy?'保存しています…':`${draft.correctionOfId?'訂正を完了':practice?'練習を完了':'完了'} <span>${practice?'デモとして保存して、次の練習へ':'会計を保存して、次のお客さんへ'}</span>`;
   const off=busy||!ready||!draft.items.length?'disabled':'';
   $('#quick-money').innerHTML=`<button data-money="exact" ${off}>ちょうど</button>`+tenderCandidates(totalYen).map(n=>`<button data-money="${n}" class="${String(n)===draft.received?'is-current':''}" ${off}>${yen(n)}</button>`).join('');
-  customerDisplay.publish(customerView());
+  // 練習の金額を、本番のお客さん用画面に流さない。
+  customerDisplay.publish(practice?{amountYen:0,receivedYen:null,changeYen:null,done:false}:customerView());
 }
 function renderHistory(){
   const date=localDate(),valid=activeReceipts(state),today=valid.filter(r=>r.businessDate===date);
@@ -81,7 +86,30 @@ function renderHistory(){
   }).join('');
   $('#csv').disabled=busy||!ready;$('#backup').disabled=busy||!ready;
 }
-function render(){renderColors();renderCart();renderHistory();}
+function render(){
+  document.body.classList.toggle('practice-mode',practice);$('#practice-banner').hidden=!practice;
+  $('#toggle-practice').textContent=practice?'本番モードに戻る':'練習モード';$('#toggle-practice').disabled=busy||!ready;
+  $('#today-title').textContent=practice?'練習の記録（本番の売上には含みません）':'きょうの売上';
+  $('#history-title').firstChild.textContent=practice?'練習の記録 ':'売上の記録 ';
+  renderColors();renderCart();renderHistory();
+}
+async function switchMode(next){
+  if(busy||!ready)return;persistDraft();busy=true;render();
+  try{
+    const live=await readState(liveDb);let target;
+    if(next){target=await openPractice(live.settings);practiceDb?.close();practiceDb=target.db;}
+    else target={db:liveDb,state:live};
+    db=target.db;state=target.state;practice=next;draft=blank();lastSale=null;historyLimit=20;recoverDraft();
+    if(state.receipts.some(r=>r.id===draft.id)){draft=blank();persistDraft();}
+    try{sessionStorage.setItem('book-flea-register-mode',practice?'practice':'live');}catch{}
+    notify(practice?'練習モードです。本番と同じ設定で操作できます。記録は本番と分けて保存します。':'本番モードに戻りました。');
+  }catch(error){notify(error.message,true);}
+  finally{busy=false;render();}
+}
+$('#toggle-practice').onclick=()=>{
+  $('#app-menu').open=false;
+  confirmAction(practice?'本番モードに戻る':'練習モードに切り替える','入力途中の会計は現在のモードに残します。練習の記録は本番の売上と分けて保存し、お客さん画面は待機表示にします。',()=>switchMode(!practice));
+};
 // index省略時はマークの1点追加。同じ価格・マーク・分類の明細へまとめる。
 function step(delta,index,colorId){
   if(busy||!ready)return;
@@ -113,13 +141,15 @@ async function commitDraft(){
 function download(content,type,name){
   const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60_000);
 }
-function saveBackup(){download(backupJSON(state),'application/json',`古本フリマレジ-backup-${localDate()}-${Date.now()}.json`);}
+function saveBackup(){download(practice?practiceBackup(state):backupJSON(state),'application/json',`${practice?'練習-':''}古本フリマレジ-backup-${localDate()}-${Date.now()}.json`);}
 function renderEditor(){
   $('#price-editor').innerHTML=editor.prices.map((p,i)=>`<div class="price-editor-row"><input type="number" min="1" max="1000000" step="1" inputmode="numeric" data-price="${i}" aria-label="価格${i+1}" value="${p.amountYen}"><span>円</span><button type="button" data-move="${i}" data-direction="-1" aria-label="価格${i+1}を上へ" ${i===0?'disabled':''}>↑</button><button type="button" data-move="${i}" data-direction="1" aria-label="価格${i+1}を下へ" ${i===editor.prices.length-1?'disabled':''}>↓</button><button type="button" class="remove-price" data-remove="${i}" ${editor.prices.length===1?'disabled':''}>削除</button></div>`).join('');
   $('#mapping-editor').innerHTML=editor.colors.map(c=>`<div class="mapping-row"><span class="mapping-name">${mark(c.id,c.hex)}${esc(c.label)}</span><select data-mapping="${c.id}" aria-label="${esc(c.label)}の価格"><option value="">価格を選択</option>${editor.prices.map(p=>`<option value="${esc(p.id)}" ${c.priceId===p.id?'selected':''}>${yen(p.amountYen)}</option>`).join('')}</select><input type="text" data-category="${c.id}" maxlength="${MAX_CATEGORY}" value="${esc(c.category)}" placeholder="未分類" aria-label="${esc(c.label)}の分類名" autocomplete="off"></div>`).join('');
 }
 function openSettings(){
+  $('#app-menu').open=false;
   if(busy||!ready)return;
+  if(practice){notify('練習は本番と同じ設定を使います。設定を変更するときは本番モードに戻ってください。');return;}
   if(state.settings.initialized&&(draft.items.length||draft.correctionOfId)){notify('設定を変える前に、会計を完了するか「やりなおす」で会計を空にしてください。',true);return;}
   editor=copy(state.settings);$('#setup-help').textContent=state.settings.initialized?'価格や分類名を変更しても、過去の売上は変わりません。':`最初に、${COLORS.length}種類のマークの値札と価格を対応させてください。`;$('#settings-error').textContent='';renderEditor();$('#settings-dialog').showModal();
 }
@@ -134,7 +164,7 @@ async function submitSettings(e){
 }
 let channel;
 try{channel=new BroadcastChannel('book-flea-register');channel.onmessage=()=>{if(!busy)notify('別のタブで更新されました。保存前に最新の記録を確認します。',true);};}catch{}
-function broadcast(){try{channel?.postMessage('updated');}catch{}}
+function broadcast(){if(practice)return;try{channel?.postMessage('updated');}catch{}}
 document.addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||b.disabled)return;
   if(b.dataset.color)step(1,undefined,b.dataset.color);
@@ -179,10 +209,11 @@ $('#confirm-form').addEventListener('submit',async e=>{e.preventDefault();const 
 $('#confirm-cancel').addEventListener('click',()=>{pendingConfirm=null;$('#confirm-dialog').close();});
 $('#confirm-dialog').addEventListener('cancel',()=>{pendingConfirm=null;});
 $('#more-history').addEventListener('click',()=>{historyLimit+=20;renderHistory();});
-$('#csv').addEventListener('click',()=>download(exportCSV(state),'text/csv;charset=utf-8',`古本フリマレジ-${localDate()}.csv`));
+$('#csv').addEventListener('click',()=>download(exportCSV(state),'text/csv;charset=utf-8',`${practice?'練習-':''}古本フリマレジ-${localDate()}.csv`));
 $('#backup').addEventListener('click',saveBackup);
-$('#restore').addEventListener('click',()=>{if(!busy)$('#restore-file').click();});
+$('#restore').addEventListener('click',()=>{if(practice){notify('練習中は本番のバックアップを復元できません。');return;}if(!busy)$('#restore-file').click();});
 $('#restore-file').addEventListener('change',async e=>{
+  if(practice){e.target.value='';notify('練習中は本番のバックアップを復元できません。');return;}
   const file=e.target.files[0];e.target.value='';if(!file)return;
   try{
     if(file.size>20_000_000)throw new Error('バックアップは20MB以内にしてください。');
@@ -198,7 +229,10 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 window.addEventListener('pagehide',persistDraft);
 window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});
 async function init(){
-  render();try{db=await openStore();state=await readState(db);recoverDraft();
+  render();try{liveDb=await openStore();db=liveDb;state=await readState(db);
+    let resumePractice=false;try{resumePractice=sessionStorage.getItem('book-flea-register-mode')==='practice';}catch{}
+    if(resumePractice){const target=await openPractice(state.settings);practiceDb=target.db;db=target.db;state=target.state;practice=true;}
+    recoverDraft();
     if(state.receipts.some(r=>r.id===draft.id)){draft=blank();persistDraft();}
     ready=true;render();notify(draft.items.length?'途中のお会計を復元しました。内容をご確認ください。':state.settings.initialized?'マークをタップすると、1点追加されます。':'最初に「設定」で、マークと価格を対応させてください。');
     if(!state.settings.initialized)openSettings();
