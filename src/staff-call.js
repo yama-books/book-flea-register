@@ -1,5 +1,15 @@
 // entrance-counterのGAS呼出APIを援用。宛先・合言葉・実URLは公開コードに置かない。
 const ownKey='book-flea-register-call',sharedKey='entrance-counter-call';
+const configFormat='staff-call-config';
+export function parseCallConfigFile(raw){
+  const data=JSON.parse(raw);
+  if(!data||data.format!==configFormat||data.version!==1)throw new Error('対応する送信設定ファイルではありません。');
+  return validateCallSettings(data);
+}
+export function makeCallConfigFile(settings){
+  const config=validateCallSettings(settings);
+  return JSON.stringify({format:configFormat,version:1,url:config.url,key:config.key},null,2);
+}
 export function validateCallSettings(value){
   if(!value||typeof value.url!=='string'||!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(value.url)||typeof value.key!=='string'||!value.key.trim()||value.key.length>200)throw new Error('送信先のウェブアプリURLと合言葉を確認してください。');
   return {url:value.url,key:value.key};
@@ -13,7 +23,7 @@ export async function sendStaffCall(settings,text,{practice=false,fetcher=global
   if(practice)return {demo:true};
   const config=validateCallSettings(settings),abort=new AbortController(),timer=setTimeout(()=>abort.abort(),timeoutMs);
   try{
-    const response=await fetcher(config.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:config.key,text,staff:'古本フリマレジ',at:new Date().toISOString()}),signal:abort.signal});
+    const response=await fetcher(config.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:config.key,text,staff:'古本フリマレジ',source:'book-sale',at:new Date().toISOString()}),signal:abort.signal});
     const result=await response.json();
     if(!response.ok||result?.ok!==true)throw new Error(typeof result?.error==='string'?result.error.slice(0,200):'送信の確認ができませんでした。');
     return {demo:false};
@@ -36,6 +46,29 @@ export function setupStaffCall({isPractice}){
       if(isPractice())throw new Error('送信設定は本番モードで変更してください。');
       const settings=validateCallSettings({url:$('#call-url').value.trim(),key:$('#call-key').value});
       localStorage.setItem(ownKey,JSON.stringify(settings));$('#call-settings').open=false;$('#call-status').textContent='この端末に送信設定を保存しました。';
+    }catch(error){$('#call-status').textContent=error.message;}
+  };
+  $('#call-config-import').onchange=async e=>{
+    const file=e.target.files?.[0];if(!file)return;
+    try{
+      if(isPractice())throw new Error('送信設定は本番モードで変更してください。');
+      if(file.size>8192)throw new Error('設定ファイルが大きすぎます。');
+      const config=parseCallConfigFile(await file.text());
+      localStorage.setItem(ownKey,JSON.stringify(config));
+      $('#call-url').value=config.url;$('#call-key').value=config.key;
+      $('#call-settings').open=false;
+      $('#call-status').textContent='共通送信設定をこの端末に取り込みました。';
+    }catch(error){$('#call-status').textContent='設定の読込に失敗：'+error.message;}
+    finally{e.target.value='';}
+  };
+  $('#call-config-export').onclick=()=>{
+    try{
+      const settings=getSettings();if(!settings)throw new Error('先に送信設定を保存してください。');
+      const content=makeCallConfigFile(settings);
+      const objectUrl=URL.createObjectURL(new Blob([content],{type:'application/json'}));
+      const a=document.createElement('a');a.href=objectUrl;a.download='staff-call-settings.local.json';a.click();
+      setTimeout(()=>URL.revokeObjectURL(objectUrl),60000);
+      $('#call-status').textContent='設定ファイルを書き出しました。合言葉が含まれるため公開しないでください。';
     }catch(error){$('#call-status').textContent=error.message;}
   };
   $('#call-form').onsubmit=async e=>{
