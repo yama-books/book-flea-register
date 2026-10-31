@@ -104,3 +104,10 @@
 - 320幅でグラフが245pxに縮み、内側2項目/欄外4項目へResizeObserverによる再配置を確認。390幅へ戻すと300px/内側6項目へ復帰し、clientWidth/scrollWidthは375/375。320幅のページ全体には5pxの横超過があり、今回のグラフ枠内には収まるが、ページ全体の320幅保証はしない。
 - Chromeの保存9件、実QR/WebRTC9件成功。TypeSafe jev_verifyで表示/配置判定/欄外表示/再配置と解除/実テスト結果の5主張すべてverified、contradicted/unsupported/reviewは0。包括承認の範囲で今回の4コード/テストファイル差分と実出力だけを送信。正本allowlistは未変更。
 - iPad Safari実機は未検証。ローカル反映のみ、commit/push・公開は未実施。
+
+## 完了表示の10秒リセット（2026-10-31）
+
+- node tests/run-checks.mjs: 構文＋Node51件×JST/UTC、exit 0。完了再送による延長/復活の防止、次会計の保護、同額の次会計、通信復帰の期限を検証。
+- Chrome tests/browser.html: 保存9件成功。tests/realtime.html: 実QR/WebRTC10件成功。毎秒再送が続く中で約10秒後に0円待機へ戻り、次会計300円へ切替を実際に確認。
+- customer-bill.jsは表示専用。保存・取消・採番や金額通信の形式は変更しない。iPad Safari実機は未検証。
+- ローカル監査packは実テストexit 0。送信許可がないためローカル証拠は未送信。公開upstream差分とCI結果でJev監査する。公開結果はLOCAL_STATUS.mdへ記録。
