@@ -1,13 +1,14 @@
-import {openStore,readState,changeState,saveSale,restoreState} from '../src/storage.js';
-import {copy,voidSale,activeReceipts,parseBackup,backupJSON,addSale} from '../src/calculation.js';
+import {openStore,readState,changeState,saveSale,restoreState,savePrediction} from '../src/storage.js';
+import {copy,voidSale,activeReceipts,parseBackup,backupJSON,addSale,initialState,finalizeDay,closedDay,localDate} from '../src/calculation.js';
+import {addPrediction} from '../src/sales-forecast.js';
 import {openPractice} from '../src/practice.js';
 const assert=(condition,message)=>{if(!condition)throw new Error(message);};
 const row={priceId:'p100',unitPriceYen:100,quantity:2,colorId:'red',colorLabel:'赤',colorHex:'#e85c63',genreId:null,genreLabel:'未分類',lineTotalYen:200};
 const sale=id=>({id,items:[copy(row)],receivedYen:1000});
 document.querySelector('#run').onclick=async()=>{
-  const button=document.querySelector('#run');button.disabled=true;document.querySelector('#results').replaceChildren();let failures=0,db,practiceDb;
+  const button=document.querySelector('#run');button.disabled=true;document.querySelector('#results').replaceChildren();let failures=0,checks=0,db,practiceDb;
   const name='book-flea-register-test-'+Date.now();
-  async function check(title,run){const li=document.createElement('li');try{await run();li.textContent='PASS '+title;li.className='pass';}catch(e){failures++;li.textContent='FAIL '+title+': '+e.message;li.className='fail';}document.querySelector('#results').append(li);}
+  async function check(title,run){checks++;const li=document.createElement('li');try{await run();li.textContent='PASS '+title;li.className='pass';}catch(e){failures++;li.textContent='FAIL '+title+': '+e.message;li.className='fail';}document.querySelector('#results').append(li);}
   try{
     db=await openStore(name);
     await check('初回設定を保存し、再接続して読戻し',async()=>{let s=await readState(db);assert(s.settings.initialized,'初期状態');s=await changeState(db,s.revision,s=>{s.settings.initialized=true;s.settings.colors.forEach(c=>c.priceId='p100');return s;});db.close();db=await openStore(name);assert((await readState(db)).settings.initialized,'再接続');});
@@ -23,14 +24,47 @@ document.querySelector('#run').onclick=async()=>{
       assert(practice.state.receipts.length===0,'本番履歴を複写しない');
       const saved=await saveSale(practiceDb,practice.state.revision,sale('demo-only'));
       const cancelled=await changeState(practiceDb,saved.revision,s=>voidSale(s,'demo-only','練習の取消'));
+      await changeState(practiceDb,cancelled.revision,s=>finalizeDay(s));
       practiceDb.close();const settings=copy(live.settings);settings.colors[0].priceId='p200';
       practice=await openPractice(settings,name+'-practice');practiceDb=practice.db;
       assert(practice.state.settings.colors[0].priceId==='p200','現在の本番設定を反映');
       assert(practice.state.receipts.length===1&&practice.state.voids.length===cancelled.voids.length,'練習履歴を維持');
-      assert(practice.state.nextReceiptNo===2,'練習の採番');
+      assert(practice.state.nextReceiptNo===2,'練習の採番');assert(Boolean(closedDay(practice.state)),'練習の確定も永続化');
       assert(JSON.stringify(await readState(db))===before,'本番の設定・履歴・採番は不変');
+    });
+    await check('前日の会計と予測を保持し、予測の再試行は重複せず古い復元を拒否',async()=>{
+      const before=await readState(db),prior=new Date();prior.setDate(prior.getDate()-1);
+      const forecastNow=new Date(2026,9,31,11),input={id:'prediction-one',businessDate:'2026-10-31',staff:'テスト担当',amountYen:5000};
+      let saved=await changeState(db,before.revision,s=>{addSale(s,sale('prior-day'),prior);return addPrediction(s,input,forecastNow);});
+      assert(saved.receipts.find(r=>r.id==='prior-day').businessDate===localDate(prior),'前日の記録');
+      assert(saved.predictions[0].staff==='テスト担当'&&saved.predictions[0].createdAt===forecastNow.toISOString(),'名前と時刻');
+      const once=JSON.stringify(saved);saved=await savePrediction(db,0,input);assert(JSON.stringify(saved)===once,'ID再試行は重複しない');
+      let rejected=false;try{await restoreState(db,saved.revision,before);}catch{rejected=true;}assert(rejected,'前日と予測を消す復元を拒否');
+      db.close();db=await openStore(name);const loaded=await readState(db);assert(loaded.predictions.length===1,'予測は再接続後も保持');assert(loaded.receipts.some(r=>r.id==='prior-day'),'前日も保持');
+    });
+    await check('旧DBを記録を保って更新し、旧版からの再接続を拒否',async()=>{
+      const legacyName=name+'-legacy',initial=initialState();delete initial.closedDays;delete initial.predictions;addSale(initial,sale('legacy-version'));
+      let upgraded,legacy;
+      try{
+        legacy=await new Promise((resolve,reject)=>{const request=indexedDB.open(legacyName,1);request.onupgradeneeded=()=>request.result.createObjectStore('register');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+        await new Promise((resolve,reject)=>{const tx=legacy.transaction('register','readwrite');tx.objectStore('register').put(initial,'state');tx.oncomplete=resolve;tx.onabort=reject;});
+        legacy.onversionchange=()=>legacy.close();upgraded=await openStore(legacyName);
+        assert(upgraded.version===2,'DB更新');assert(JSON.stringify(await readState(upgraded))===JSON.stringify(initial),'全記録保持');
+        const rejected=await new Promise(resolve=>{const request=indexedDB.open(legacyName,1);request.onerror=()=>resolve(request.error.name==='VersionError');request.onsuccess=()=>{request.result.close();resolve(false);};});assert(rejected,'旧版の書込入口を止める');
+      }finally{legacy?.close();upgraded?.close();indexedDB.deleteDatabase(legacyName);}
+    });
+    await check('確定と追加の競合を排他制御し、再接続後も追加・取消・古い復元を拒否',async()=>{
+      const before=await readState(db),date=localDate();
+      const race=await Promise.allSettled([changeState(db,before.revision,s=>finalizeDay(s,date)),saveSale(db,before.revision,sale('close-race'))]);
+      assert(race.filter(r=>r.status==='fulfilled').length===1,'同じrevisionの操作は片方だけ');
+      let closed=await readState(db);if(!closedDay(closed,date))closed=await changeState(db,closed.revision,s=>finalizeDay(s,date));
+      db.close();db=await openStore(name);closed=await readState(db);assert(Boolean(closedDay(closed,date)),'確定を永続化');const snapshot=JSON.stringify(closed);
+      for(const action of [()=>saveSale(db,closed.revision,sale('after-close')),()=>changeState(db,closed.revision,s=>voidSale(s,'replacement','取消')),()=>restoreState(db,closed.revision,before),()=>changeState(db,closed.revision,s=>{s.receipts.find(r=>r.businessDate===date).items[0].genreLabel='書換';return s;})]){
+        let rejected=false;try{await action();}catch{rejected=true;}assert(rejected,'確定後変更拒否');assert(JSON.stringify(await readState(db))===snapshot,'失敗後の記録不変');
+      }
+      const restored=await restoreState(db,closed.revision,parseBackup(backupJSON(closed)));assert(Boolean(closedDay(restored,date)),'同じ確定記録を含む復元は可能');
     });
     await check('閉じたDBへの保存失敗を成功と扱わない',async()=>{const s=await readState(db);db.close();let rejected=false;try{await saveSale(db,s.revision,sale('closed-db'));}catch{rejected=true;}assert(rejected,'失敗通知');db=await openStore(name);assert(!(await readState(db)).receipts.some(r=>r.id==='closed-db'),'未保存');});
   }catch(e){failures++;document.querySelector('#status').textContent=e.message;}
-  finally{db?.close();practiceDb?.close();indexedDB.deleteDatabase(name);indexedDB.deleteDatabase(name+'-practice');document.querySelector('#status').textContent=failures?`FAIL: ${failures}件`:'PASS: 保存テスト9件すべて成功';button.disabled=false;}
+  finally{db?.close();practiceDb?.close();indexedDB.deleteDatabase(name);indexedDB.deleteDatabase(name+'-practice');document.querySelector('#status').textContent=failures?`FAIL: ${failures}件`:`PASS: 保存テスト${checks}件すべて成功`;button.disabled=false;}
 };

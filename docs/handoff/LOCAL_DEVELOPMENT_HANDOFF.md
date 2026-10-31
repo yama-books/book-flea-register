@@ -26,8 +26,8 @@ src/app.js: 会計/設定/練習切替/描画。src/calculation.js: 検証・会
 
 ## 変更時の検証と公開
 
-1. `node tests/run-checks.mjs`（構文＋Node46件×JST/UTC）。依存インストール不要。
-2. `tests/browser.html` 保存9件、`tests/realtime.html` 実QR/WebRTC9件。保存テストは専用DB。本番/実売上をテストに使わない。tests/layout.htmlで1024×768/768×1024/390幅を確認。
+1. `node tests/run-checks.mjs`（構文＋Node64件×JST/UTC）。依存インストール不要。
+2. `tests/browser.html` 保存12件、`tests/realtime.html` 実QR/WebRTC10件。保存テストは専用DB。本番/実売上をテストに使わない。tests/layout.htmlで1024×768/768×1024/390幅を確認。
 3. 実テスト後、適用AGENTSとJev規則に従う。正本allowlist外のローカル資料は無断送信しない。ローカルaudit packはsend_allowed=falseで未送信、公開済みupstreamの差分と実CIログだけで監査してきた。verified/contradicted/unsupportedとreview confidenceを区別する。
 4. 公開はyama-booksだけ。CI Register checksとPages成功、GitHub読戻しと公開Pagesのハッシュ一致を確認。LOCAL_STATUS.mdに最新コミット/検証/限界を記録する。Factory owner/Secret/認証境界は変更しない。
 
@@ -35,7 +35,7 @@ src/app.js: 会計/設定/練習切替/描画。src/calculation.js: 検証・会
 
 - iPad Safariの新UI、円グラフの動き、全画面、数字キーボード、CSV/JSON保存と復元、Wake Lock・7.5時間接続。
 - GAS本デプロイとメール着信。現状は模擬送信テストのみ。勝手に実呼出を試さない。
-- 青の分類名、営業日締め、売上も含むリセットの要否は未確定。現在は設定のみリセットし履歴は残す。
+- 青の分類名、売上も含むリセットの要否は未確定。日次確定は2026-10-31に実装。現在は設定のみリセットし履歴は残す。
 - 以前、公開直後に一度だけ読込中で止まり再読込で正常化した。原因は未確定。再発時は具体的なエラーを調べ、原因を推測だけで断定しない。
 - 台帳登録、素材の独立した利用条件確認は未実施。
 
@@ -65,3 +65,10 @@ vendor/sources.jsonの既存改行差分、entrance-counter/（参照のみ）�
 ## お客さん表示の自動リセット（2026-10-31）
 
 完了後は「ありがとうございました！」と金額を約10秒表示して、0円・お預かり/お釣り未入力、通常メッセージ空欄の待機状態へ戻す。毎秒の完了再送は期限を延長せず、期限後の再送でも金額を復活させない。次会計が始まれば即時切替し、古いタイマーで消さない。通信停止時はタイマーを解除し、復帰時も元の期限を使う。表示だけを変更し、レジの確定履歴と接続は維持する。
+
+## 未公開の追加機能と次セッション（2026-10-31）
+
+売上確定・呼出送信案内・売上予測・前日データ保護を同じ作業ツリーで実装中。ユーザーのコンテクスト整理依頼により、次は [追加機能の引継ぎ](FEATURES_20261031_HANDOFF.md) を最優先で読む。最終実テスト64件×JST/UTC、保存12件・通信10件成功。今回の機能は未公開。DB2・復元保護・Jev reviewの受入根拠・残る幅確認・送信遅延の調査内容・公開手順を同文書にまとめた。
+
+
+2026-10-31 続行分：最新の機能仕様はREADME、REQUIREMENTS、UI_DESIGN、CALL_SETUPとFEATURES_20261031_HANDOFFを参照。上記の古い「未確定」「全体置換」等より、日次確定/履歴保持/保存後の予測閲覧に関する最新仕様を優先する。残るiPad実機・共有GAS実送受信は未検証のまま区別する。

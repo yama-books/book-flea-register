@@ -111,3 +111,17 @@
 - Chrome tests/browser.html: 保存9件成功。tests/realtime.html: 実QR/WebRTC10件成功。毎秒再送が続く中で約10秒後に0円待機へ戻り、次会計300円へ切替を実際に確認。
 - customer-bill.jsは表示専用。保存・取消・採番や金額通信の形式は変更しない。iPad Safari実機は未検証。
 - ローカル監査packは実テストexit 0。送信許可がないためローカル証拠は未送信。公開upstream差分とCI結果でJev監査する。公開結果はLOCAL_STATUS.mdへ記録。
+
+## 日次確定・予測・呼出案内（2026-10-31）
+
+- 引継ぎ時点の実測：node tests/run-checks.mjs 構文＋64件×Asia/Tokyo/UTC、exit 0。Chromeの専用DB保存12件、実QR/WebRTC10件成功。DB1→2保持と旧版拒否、確定と追加の競合、確定後の書込/復元拒否、前日の会計/予測の再接続後保持、練習分離を含む。iPad Safari実機の結果ではない。
+- 引継ぎ前TypeSafe jev_verify：9 verified、0 contradicted、0 unsupported、3 review。DB更新・保存後の予測閲覧・呼出進捗のreviewは、ホストが実保存テスト/実画面/コードを照合して受入。reviewを自動通過と称していない。
+- 続行時のnode tests/run-checks.mjsもexit 0、構文＋64件×Asia/Tokyo/UTC。最終CSSの列幅調整はこの後のブラウザー確認で検証する。
+- Edgeの1024×768・768×1024・390×844で追加ヘッダー、予測画面、担当者名→要件の呼出フォームを確認。長い合成名（80文字）と99,999,999円の予測を練習DBに保存。幅390では金額列を広げ、長い担当者名を折り返す。スクロールして表全体へ到達できる。端末実機やソフトキーボードの試験ではない。
+- 保存後にだけ前の予測を表示し、閉じて開き直すとDOM内の表の行が0件となることを確認。非公開fixtureで実アプリの保存関数だけ初回失敗に差替え、失敗表示・名前/金額保持・履歴非表示（行0）を確認。同じ入力で再試行すると実保存が成功して過去の予測が表示された。fixtureは公開しない。
+- 本番の日次確定・本番売上追加/変更・実メール送信・共有GAS再デプロイは今回実施していない。約30秒の送信時間の内訳・短縮効果は未計測。更新したのは待機案内と確認期限。Google公式資料と実コードによる説明をCALL_SETUP.mdへ記載。
+- 最終レビュー/公開/CI/Pages/ファイル一致は別段階として記録する。iPad Safari実機、会場での連続運用、共有GAS実送受信は未検証。
+
+- 続行時の最終監査：TypeSafe jev_verify 7 verified/0 contradicted/0 unsupported、1 review（保存後閲覧、confidence 0.48）。該当await後の代入・開き直し時の初期化と、実画面での保存失敗/行0/再試行成功をホストが照合して受入。
+- TypeSafe jev_reviewは13ファイルを省略なしで確認しescalate（safe_to_apply 0.57、composite 0.7387、confidence_below_review）。限定要因はtest_gap/blast_radiusの確信度で、具体的なcorrectness findingは出ていない。自動通過とは扱わず、上記実テスト/保存/通信/幅別UIとコードのホストレビューにより受入。再試行で好結果を得ようとはしていない。jev_gateは使っていない。
+- 390幅の最終列幅18/20/34/28%を適用し、ページ/予測dialog/表に横はみ出しなし。99,999,999円の文字範囲が1行であることを実DOMで確認。

@@ -215,6 +215,34 @@ textarea{display:block;width:100%;resize:vertical;font:12px/1.5 ui-monospace,mon
 .practice-mode .register .complete{background:#68428b;border-color:#452360}
 .practice-mode #call-dialog{border:3px dashed #77469b;background:#faf3ff}
 #call-mode{font-weight:700}
+#call-form,.call-field{display:grid;gap:8px;min-width:0}
+#call-form{gap:18px}
+.call-field label{font-size:.9rem;font-weight:700}
+.call-field input,.call-field textarea{display:block;width:100%;min-width:0;max-width:100%}
+.call-field textarea{resize:vertical;line-height:1.6;padding:12px;border:1.5px solid #80918c;border-radius:4px;font:inherit}
+#call-submit{display:flex;justify-content:center;align-items:center;gap:10px;width:100%}
+.sending-spinner{width:20px;height:20px;flex:0 0 20px;border:3px solid currentColor;border-right-color:transparent;border-radius:50%}
+@keyframes sending-turn{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:no-preference){.sending-spinner{animation:sending-turn .8s linear infinite}}
+.day-finalization{margin:14px 0;padding-top:14px;border-top:1px solid var(--line)}
+#finalize-day{width:100%;border-color:var(--green);color:var(--green)}
+.closed-day-label{color:var(--green);font-weight:700}
+.header-actions{flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.header-cat{flex-shrink:0}
+.forecast-estimates{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.forecast-estimates>div{display:flex;flex-direction:column;gap:8px;padding:16px;background:#edf5ed;border:1px solid #cbd9d1;border-radius:6px;min-width:0}
+.forecast-estimates span{font-size:.85rem;color:var(--muted)}
+.forecast-estimates strong{font-size:clamp(1.2rem,3vw,2rem);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.prediction-entry{margin-top:20px;padding-top:8px;border-top:1px solid var(--line)}
+#prediction-form,.prediction-field{display:grid;gap:8px;min-width:0}
+#prediction-form{gap:16px;margin-top:14px}
+.prediction-field label{font-size:.9rem;font-weight:700}
+.prediction-field input{width:100%}
+.prediction-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:.75rem}
+.prediction-table th,.prediction-table td{text-align:left;padding:10px 5px;border-bottom:1px solid var(--line);overflow-wrap:anywhere;vertical-align:top}
+.prediction-table td:nth-child(3){font-variant-numeric:tabular-nums}
+@media(max-width:500px){.prediction-table th:nth-child(1){width:18%}.prediction-table th:nth-child(2){width:20%}.prediction-table th:nth-child(3){width:34%}.prediction-table th:nth-child(4){width:28%}}
+@media(max-width:500px){.forecast-estimates{grid-template-columns:1fr}.app-header{align-items:flex-start}}
 #call-settings input{display:block;width:100%;margin:6px 0 14px}
 
 /* 頻繁に使う操作は最上部に常設。接続と全画面は設定へ。 */

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/calculation.test.js tests/signaling.test.js tests/display-support.test.js tests/menu.test.js tests/sales-summary.test.js tests/chart-motion.test.js tests/customer-bill.test.js",
-    "check": "node --check src/app.js && node --check src/storage.js && node --check src/calculation.js && node --check src/signaling.js && node --check src/amount-link.js && node --check src/qr.js && node --check src/customer.js && node --check src/customer-bill.js && node --check src/customer-controls.js && node --check src/display-support.js && node --check src/practice.js && node --check src/staff-call.js && node --check src/menu.js && node --check src/sales-summary.js && node --check src/chart-motion.js"
+    "test": "node --test tests/calculation.test.js tests/signaling.test.js tests/display-support.test.js tests/menu.test.js tests/sales-summary.test.js tests/sales-forecast.test.js tests/chart-motion.test.js tests/customer-bill.test.js",
+    "check": "node --check src/app.js && node --check src/storage.js && node --check src/calculation.js && node --check src/signaling.js && node --check src/amount-link.js && node --check src/qr.js && node --check src/customer.js && node --check src/customer-bill.js && node --check src/customer-controls.js && node --check src/display-support.js && node --check src/practice.js && node --check src/staff-call.js && node --check src/menu.js && node --check src/sales-forecast.js && node --check src/sales-summary.js && node --check src/chart-motion.js"
   }
 }

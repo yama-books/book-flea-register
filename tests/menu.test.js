@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {toggleFullscreen} from '../src/menu.js';
-import {validateCallSettings,readCallSettings,sendStaffCall,CALL_ENDPOINT_URL} from '../src/staff-call.js';
+import {validateCallSettings,readCallSettings,sendStaffCall,CALL_ENDPOINT_URL,setupStaffCall,CALL_TIMEOUT_MS} from '../src/staff-call.js';
 import {practiceBackup,draftKey} from '../src/practice.js';
 import {initialState,parseBackup} from '../src/calculation.js';
 test('練習の途中会計とバックアップを本番として読み込まない',()=>{
@@ -63,4 +63,34 @@ test('GASひな形は合言葉・連打・日次上限を確認してから模�
   assert.equal(context.doPost({postData:{contents:JSON.stringify({key:'test-only',text:'受付に来て',staff:'受付係',source:'library'})}}).ok,true);
   assert.equal(mail.subject,'【図書館受付より】山本を呼ぶ');assert.equal(sent,2);
   cache.clear();props.set('CALL_COUNT','50');assert.equal(request('test-only').ok,false);assert.equal(sent,2);
+});
+
+function callFormFixture(t,{practice=false,send}={}){
+  const elements=new Map(),timers=new Map();let id=0;
+  const element=selector=>{if(!elements.has(selector))elements.set(selector,{value:'',textContent:'',disabled:false,hidden:true,attrs:{},addEventListener(){},setAttribute(key,value){this.attrs[key]=value;},showModal(){},close(){}});return elements.get(selector);};
+  const originalDocument=Object.getOwnPropertyDescriptor(globalThis,'document'),originalStorage=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
+  Object.defineProperty(globalThis,'document',{configurable:true,value:{querySelector:element}});
+  Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:()=>JSON.stringify(config)}});
+  t.after(()=>{for(const [key,descriptor] of [['document',originalDocument],['localStorage',originalStorage]]){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}});
+  setupStaffCall({isPractice:()=>practice,send,schedule:(callback,ms)=>{timers.set(++id,{callback,ms});return id;},cancel:timer=>timers.delete(timer)});
+  element('#call-staff').value='係員';element('#call-input').value='本を運んでください';
+  return {element,timers,submit:()=>element('#call-form').onsubmit({preventDefault(){}})};
+}
+test('送信中はスピナーと段階案内を出し二重送信を止め、成功で案内タイマーを解除',async t=>{
+  let resolve,calls=0;const f=callFormFixture(t,{send:()=>{calls++;return new Promise(done=>{resolve=done;});}});
+  const pending=f.submit();assert.equal(f.element('#call-spinner').hidden,false);assert.equal(f.element('#call-form').attrs['aria-busy'],'true');
+  assert.equal(f.element('#call-staff').disabled,true);assert.equal(f.element('#call-input').disabled,true);assert.equal(f.element('#call-submit').disabled,true);
+  assert.equal(f.timers.size,2);[...f.timers.values()].find(timer=>timer.ms===5000).callback();assert.match(f.element('#call-status').textContent,/30秒/);
+  [...f.timers.values()].find(timer=>timer.ms===30000).callback();assert.match(f.element('#call-status').textContent,/通常より/);
+  await f.submit();assert.equal(calls,1);resolve({demo:false});await pending;
+  assert.equal(f.element('#call-status').textContent,'送信しました。');assert.equal(f.element('#call-staff').value,'');assert.equal(f.element('#call-input').value,'');
+  assert.equal(f.timers.size,0);assert.equal(f.element('#call-spinner').hidden,true);assert.equal(f.element('#call-form').attrs['aria-busy'],'false');assert.equal(f.element('#call-submit').disabled,false);
+  assert.equal(CALL_TIMEOUT_MS,60000);
+});
+test('送信結果が不明なら入力を保持し受信確認を案内、練習には遅延案内を出さない',async t=>{
+  const f=callFormFixture(t,{send:async()=>{throw Object.assign(new Error('timeout'),{name:'AbortError'});}});await f.submit();
+  assert.equal(f.element('#call-staff').value,'係員');assert.equal(f.element('#call-input').value,'本を運んでください');assert.match(f.element('#call-status').textContent,/再送前に受信を確認/);assert.equal(f.timers.size,0);assert.equal(f.element('#close-call').disabled,false);
+});
+test('練習のフォーム送信には遅延案内を出さない',async t=>{
+  const demo=callFormFixture(t,{practice:true,send:async(_settings,_text,{practice})=>{assert.equal(practice,true);assert.equal(demo.timers.size,0);}});await demo.submit();assert.match(demo.element('#call-status').textContent,/メールは送っていません/);
 });

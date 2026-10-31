@@ -16,7 +16,7 @@ export function parseMoney(text) {
 }
 export function initialState() {
   return {schemaVersion:1, revision:0, nextReceiptNo:1,
-    settings:{markerVersion:MARKER_VERSION, initialized:true, prices:[100,200,400].map(n=>({id:`p${n}`,amountYen:n})), colors:COLORS.map(([id,label,hex])=>({id,label,hex,priceId:'p100',category:DEFAULT_CATEGORIES[id]}))}, receipts:[], voids:[]};
+    settings:{markerVersion:MARKER_VERSION, initialized:true, prices:[100,200,400].map(n=>({id:`p${n}`,amountYen:n})), colors:COLORS.map(([id,label,hex])=>({id,label,hex,priceId:'p100',category:DEFAULT_CATEGORIES[id]}))}, receipts:[], voids:[], closedDays:[], predictions:[]};
 }
 export function migrateMarkers(state) {
   const colors=state?.settings?.colors;
@@ -89,16 +89,57 @@ export function activeReceipts(state) {
   return state.receipts.filter(r=>!removed.has(r.id));
 }
 export function salesTotal(receipts) { return receipts.reduce((sum,r)=>integer(sum+r.totalYen,0,Number.MAX_SAFE_INTEGER),0); }
+export function closedDay(state,date=localDate()) {return state.closedDays?.find(day=>day.businessDate===date);}
+function requireOpenDay(state,date) {
+  if(closedDay(state,date))throw new Error(`${date}の売上は確定済みです。追加・取消・訂正はできません。`);
+}
+function dayTotals(state,date){
+  const receipts=activeReceipts(state).filter(r=>r.businessDate===date);
+  return {totalYen:salesTotal(receipts),quantityTotal:receipts.reduce((sum,r)=>integer(sum+r.quantityTotal,0,Number.MAX_SAFE_INTEGER),0),receiptCount:receipts.length};
+}
+export function finalizeDay(state,date=localDate(),now=new Date()){
+  if(date!==localDate(now))throw new Error('日付が変わりました。当日の売上を確認して、もう一度確定してください。');
+  if(closedDay(state,date))return state;
+  state.closedDays??=[];
+  state.closedDays.push({businessDate:date,finalizedAt:now.toISOString(),...dayTotals(state,date)});
+  return state;
+}
+function canonical(value){
+  if(Array.isArray(value))return value.map(canonical);
+  if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])]));
+  return value;
+}
+// 復元や設定保存も同じ入口を通す。確定日の会計・取消・確定記録を変更させない。
+export function assertClosedDaysPreserved(before,after){
+  for(const day of before.closedDays??[]){
+    const snapshot=state=>{
+      const receipts=state.receipts.filter(r=>r.businessDate===day.businessDate).sort((a,b)=>a.id.localeCompare(b.id));
+      const ids=new Set(receipts.map(r=>r.id));
+      return JSON.stringify(canonical({day:closedDay(state,day.businessDate),receipts,voids:state.voids.filter(v=>ids.has(v.receiptId)).sort((a,b)=>a.id.localeCompare(b.id))}));
+    };
+    if(snapshot(before)!==snapshot(after))throw new Error(`${day.businessDate}の確定済み売上を変更するデータは保存・復元できません。`);
+  }
+}
+export function assertRecordedDataPreserved(before,after){
+  for(const field of ['receipts','voids','predictions']){
+    for(const [index,row] of (before[field]??[]).entries()){
+      if(JSON.stringify(canonical(after[field]?.[index]))!==JSON.stringify(canonical(row)))throw new Error('保存済みの会計・取消・予測を消したり書き換えたりする復元はできません。新しいバックアップを選んでください。');
+    }
+  }
+  if(after.nextReceiptNo<before.nextReceiptNo)throw new Error('採番を過去に戻す復元はできません。');
+}
 export function makeReceipt(state, draft, now = new Date()) {
   if (!state.settings.initialized) throw new Error('最初に色と価格を設定してください。');
   text(draft.id); const existing=state.receipts.find(r=>r.id===draft.id);
   if (existing) return existing;
+  requireOpenDay(state,localDate(now));
   const items=copy(draft.items);
   if (!items.length) throw new Error('本を追加してください。');
   for (const item of items) validateItem(item);
   const {totalYen,quantityTotal}=totals(items), receivedYen=integer(draft.receivedYen);
   if (receivedYen<totalYen) throw new Error('お預かり金額が不足しています。');
   const correctionOfId=draft.correctionOfId || null;
+  if(correctionOfId){const original=state.receipts.find(r=>r.id===correctionOfId);if(original)requireOpenDay(state,original.businessDate);}
   if (correctionOfId && !activeReceipts(state).some(r=>r.id===correctionOfId)) throw new Error('訂正元の会計が変更されています。再読込してください。');
   const prior=activeReceipts(state).filter(r=>r.id!==correctionOfId);
   return {id:draft.id,receiptNo:integer(state.nextReceiptNo,1,Number.MAX_SAFE_INTEGER-1),committedAt:now.toISOString(),businessDate:localDate(now),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone || 'local',utcOffsetMinutes:0-now.getTimezoneOffset(),items,quantityTotal,totalYen,receivedYen,changeYen:receivedYen-totalYen,cumulativeAtCommitYen:integer(salesTotal(prior)+totalYen,0,Number.MAX_SAFE_INTEGER),correctionOfId};
@@ -112,7 +153,9 @@ export function addSale(state,draft,now = new Date()) {
 }
 export function voidSale(state,id,reason,now = new Date()) {
   if (state.voids.some(v=>v.receiptId===id)) return state;
-  if (!state.receipts.some(r=>r.id===id)) throw new Error('会計が見つかりません。');
+  const receipt=state.receipts.find(r=>r.id===id);
+  if (!receipt) throw new Error('会計が見つかりません。');
+  requireOpenDay(state,receipt.businessDate);
   text(reason,200); state.voids.push({id:`void-${id}`,receiptId:id,voidedAt:now.toISOString(),reason,replacementReceiptId:null}); return state;
 }
 export function validateState(state) {
@@ -137,7 +180,25 @@ export function validateState(state) {
     if (v.replacementReceiptId && !state.receipts.some(r=>r.id===v.replacementReceiptId && r.correctionOfId===v.receiptId)) throw new Error('訂正の関連情報が不正です。');
   }
   for(const r of state.receipts) if(r.correctionOfId && !state.voids.some(v=>v.receiptId===r.correctionOfId && v.replacementReceiptId===r.id)) throw new Error('訂正元が不正です。');
-  salesTotal(activeReceipts(state)); return state;
+  salesTotal(activeReceipts(state));
+  if(state.closedDays!==undefined){
+    if(!Array.isArray(state.closedDays)||state.closedDays.length>50_000)throw new Error('売上確定の記録が不正です。');
+    unique(state.closedDays,'businessDate');
+    for(const day of state.closedDays){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(day.businessDate)||!Number.isFinite(Date.parse(day.businessDate))||new Date(day.businessDate).toISOString().slice(0,10)!==day.businessDate||!Number.isFinite(Date.parse(day.finalizedAt)))throw new Error('売上確定の日付が不正です。');
+      const actual=dayTotals(state,day.businessDate);
+      for(const key of ['totalYen','quantityTotal','receiptCount'])if(integer(day[key],0,Number.MAX_SAFE_INTEGER)!==actual[key])throw new Error('確定済み売上の合計が一致しません。');
+    }
+  }
+  if(state.predictions!==undefined){
+    if(!Array.isArray(state.predictions)||state.predictions.length>50_000)throw new Error('予測の記録が不正です。');
+    unique(state.predictions,'id');
+    for(const prediction of state.predictions){
+      text(prediction.id);text(prediction.staff,80);integer(prediction.amountYen);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(prediction.businessDate)||!Number.isFinite(Date.parse(prediction.businessDate))||new Date(prediction.businessDate).toISOString().slice(0,10)!==prediction.businessDate||!Number.isFinite(Date.parse(prediction.createdAt)))throw new Error('予測の日時が不正です。');
+    }
+  }
+  return state;
 }
 export function parseBackup(raw) {
   if (raw.length>20_000_000) throw new Error('バックアップは20MB以内にしてください。');

@@ -1,6 +1,7 @@
 // Only the public GAS endpoint is shipped. Passcodes stay in localStorage and GAS script properties.
 export const CALL_ENDPOINT_URL='https://script.google.com/macros/s/AKfycbzJqPHStaj08vfVucJ0hl7a1Nlw7lDIIcq1i5DSj0uRDySu4pS2J1-FpUfqR-fNMnJ9/exec';
 const ownKey='book-flea-register-call',sharedKey='entrance-counter-call';
+export const CALL_TIMEOUT_MS=60_000;
 export function validateCallSettings(value){
   if(!value||typeof value.key!=='string'||!value.key.trim()||value.key.length>200)
     throw new Error('合言葉を1〜200文字で入力してください。');
@@ -14,7 +15,7 @@ export function readCallSettings(storage){
   }
   return null;
 }
-export async function sendStaffCall(settings,text,{staff='',practice=false,fetcher=globalThis.fetch,timeoutMs=20000}={}){
+export async function sendStaffCall(settings,text,{staff='',practice=false,fetcher=globalThis.fetch,timeoutMs=CALL_TIMEOUT_MS}={}){
   text=String(text).trim();if(!text||text.length>500)throw new Error('要件を1〜500文字で入力してください。');
   staff=String(staff).trim();if(!staff||staff.length>80)throw new Error('担当者名を1〜80文字で入力してください。');
   if(practice)return {demo:true};
@@ -26,13 +27,13 @@ export async function sendStaffCall(settings,text,{staff='',practice=false,fetch
     return {demo:false};
   }finally{clearTimeout(timer);}
 }
-export function setupStaffCall({isPractice}){
+export function setupStaffCall({isPractice,send=sendStaffCall,settingsReader=()=>readCallSettings(localStorage),schedule=setTimeout,cancel=clearTimeout}){
   const $=s=>document.querySelector(s);let sending=false;
-  const getSettings=()=>{try{return readCallSettings(localStorage);}catch{return null;}};
+  const getSettings=()=>{try{return settingsReader();}catch{return null;}};
   $('#open-call').onclick=()=>{
     const settings=getSettings();$('#call-dialog').showModal();
     $('#call-mode').textContent=isPractice()?'練習モードです。実際にはメールを送りません。':'入力した要件を山本へメールで送ります。';
-    $('#call-submit').textContent=isPractice()?'呼出を練習する':'山本を呼ぶ（メール送信）';
+    $('#call-submit-label').textContent=isPractice()?'呼出を練習する':'山本を呼ぶ（メール送信）';
     $('#call-status').textContent=settings?.shared?'共通の合言葉を使用します。':settings?'':isPractice()?'':'合言葉が未設定です。「設定」→「メール通知」で入力してください。';
   };
   $('#close-call').onclick=()=>{if(!sending)$('#call-dialog').close();};
@@ -51,11 +52,20 @@ export function setupStaffCall({isPractice}){
     e.preventDefault();if(sending)return;
     const practice=isPractice();
     if(!practice&&!getSettings()){$('#call-status').textContent='合言葉が未設定です。「設定」→「メール通知」で保存してください。要件は残っています。';return;}
-    sending=true;$('#call-submit').disabled=true;$('#close-call').disabled=true;$('#call-status').textContent=practice?'練習しています…':'送信中…';
+    sending=true;$('#call-submit').disabled=true;$('#close-call').disabled=true;
+    $('#call-staff').disabled=true;$('#call-input').disabled=true;$('#call-spinner').hidden=false;
+    $('#call-form').setAttribute('aria-busy','true');$('#call-submit-label').textContent=practice?'練習中…':'送信中…';
+    $('#call-status').textContent=practice?'練習しています…':'メールを送信しています。そのままお待ちください。';
+    const timers=practice?[]:[
+      schedule(()=>{$('#call-status').textContent='この処理には30秒ほどかかる場合があります。そのままお待ちください。';},5000),
+      schedule(()=>{$('#call-status').textContent='通常より時間がかかっています。送信結果を確認していますので、もうしばらくお待ちください。';},30000)
+    ];
     try{
-      await sendStaffCall(getSettings(),$('#call-input').value,{staff:$('#call-staff').value,practice});
+      await send(getSettings(),$('#call-input').value,{staff:$('#call-staff').value,practice});
       $('#call-input').value='';$('#call-staff').value='';$('#call-status').textContent=practice?'呼出の練習ができました。メールは送っていません。':'送信しました。';
-    }catch(error){$('#call-status').textContent=(error.name==='AbortError'?'時間内に送信結果を確認できませんでした。':error.message)+' 要件は残っています。';}
-    finally{sending=false;$('#call-submit').disabled=false;$('#close-call').disabled=false;}
+    }catch(error){$('#call-status').textContent=(error.name==='AbortError'?'時間内に送信結果を確認できませんでした。':error.message)+' 担当者名と要件は残っています。メールが届いている場合があるため、再送前に受信を確認してください。';}
+    finally{timers.forEach(cancel);sending=false;$('#call-submit').disabled=false;$('#close-call').disabled=false;
+      $('#call-staff').disabled=false;$('#call-input').disabled=false;$('#call-spinner').hidden=true;
+      $('#call-form').setAttribute('aria-busy','false');$('#call-submit-label').textContent=practice?'呼出を練習する':'山本を呼ぶ（メール送信）';}
   };
 }

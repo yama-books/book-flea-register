@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialState,copy,totals,parseMoney,addSale,voidSale,activeReceipts,salesTotal,parseBackup,backupJSON,exportCSV,validateState,validateSettings,migrateMarkers,categoryOf,tenderCandidates} from '../src/calculation.js';
+import {initialState,copy,totals,parseMoney,addSale,voidSale,activeReceipts,salesTotal,parseBackup,backupJSON,exportCSV,validateState,validateSettings,migrateMarkers,categoryOf,tenderCandidates,closedDay,finalizeDay,assertClosedDaysPreserved,localDate} from '../src/calculation.js';
 const setup=()=>{const s=initialState();s.settings.initialized=true;s.settings.colors.forEach((c,i)=>c.priceId=s.settings.prices[i%3].id);return s;};
 const item=(price=100,quantity=1,color='red',genre='文庫')=>({priceId:`p${price}`,unitPriceYen:price,quantity,colorId:color,colorLabel:color==='red'?'赤':'青',colorHex:'#e85c63',genreId:'g0',genreLabel:genre,lineTotalYen:price*quantity});
 const draft=(id='sale-1',items=[item(100,2),item(400,1,'blue')],receivedYen=1000)=>({id,items,receivedYen});
@@ -22,3 +22,35 @@ test('分類名は20文字以内の任意文字列、改行や制御文字は拒
 test('6マーク版(markerVersion2)から価格対応を保ったままCDと分類名を追加し、履歴は変えない',()=>{const s=initialState();s.settings.markerVersion=2;s.settings.colors=s.settings.colors.filter(c=>c.id!=='cd').map(({category,...c})=>c);s.settings.genres=[];s.settings.colors.find(c=>c.id==='red').priceId='p400';addSale(s,draft('v2',[item(400,1)],400));const before=copy(s.receipts);const m=migrateMarkers(s);assert.equal(m.settings.markerVersion,3);assert.equal(m.settings.colors.length,7);assert.equal(m.settings.colors.find(c=>c.id==='red').priceId,'p400');assert.equal(m.settings.colors.find(c=>c.id==='cd').priceId,'p100');assert.equal(m.settings.colors.find(c=>c.id==='green').category,'単行本');assert.equal('genres' in m.settings,false);assert.deepEqual(m.receipts,before);validateState(m);assert.equal(s.settings.markerVersion,2,'元のオブジェクトは変更しない');assert.equal(migrateMarkers(m),m,'移行済みはそのまま');});
 test('CDマークの会計を保存でき、分類snapshotは設定変更で変わらない',()=>{const s=setup(),cd={...item(200),colorId:'cd',colorLabel:'CD',colorHex:'#ffffff',genreId:null,genreLabel:'CD'};addSale(s,draft('cd',[cd],200));s.settings.colors.find(c=>c.id==='cd').category='レコード';validateState(s);assert.equal(s.receipts[0].items[0].genreLabel,'CD');assert.ok(exportCSV(s).includes('"CD"'));});
 test('お預かり候補は合計を500円・千円・五千円・一万円単位で切り上げ、ちょうどの額と重複を除く',()=>{assert.deepEqual(tenderCandidates(300),[500,1000,5000,10000]);assert.deepEqual(tenderCandidates(1300),[1500,2000,5000,10000]);assert.deepEqual(tenderCandidates(1800),[2000,5000,10000]);assert.deepEqual(tenderCandidates(1000),[5000,10000]);assert.deepEqual(tenderCandidates(500),[1000,5000,10000]);assert.deepEqual(tenderCandidates(12300),[12500,13000,15000,20000]);assert.deepEqual(tenderCandidates(10000),[]);assert.deepEqual(tenderCandidates(0),[]);for(const bad of [-100,1.5,NaN])assert.throws(()=>tenderCandidates(bad));});
+
+test('当日確定は取消を除いた合計と点数を保存し、会計追加・取消・翌日からの訂正を拒否',()=>{
+  const s=setup(),now=new Date(2026,9,31,16),date=localDate(now);
+  addSale(s,draft('active'),now);addSale(s,draft('voided'),now);voidSale(s,'voided','取消',now);
+  finalizeDay(s,date,now);assert.deepEqual(closedDay(s,date),{businessDate:date,finalizedAt:now.toISOString(),totalYen:600,quantityTotal:3,receiptCount:1});
+  const before=copy(s);assert.throws(()=>addSale(s,draft('late'),now),/確定済み/);assert.throws(()=>voidSale(s,'active','取消',now),/確定済み/);
+  const nextDay=new Date(2026,10,1,9);assert.throws(()=>addSale(s,{...draft('correction'),correctionOfId:'active'},nextDay),/確定済み/);
+  assert.deepEqual(s,before);addSale(s,draft('tomorrow'),nextDay);assert.equal(s.receipts.at(-1).businessDate,localDate(nextDay));validateState(s);
+});
+test('確定の再実行と同じ会計IDの再試行は冪等、確認中の日付変更は確定しない',()=>{
+  const s=setup(),now=new Date(2026,9,31,16),date=localDate(now);addSale(s,draft(),now);finalizeDay(s,date,now);
+  const before=copy(s);finalizeDay(s,date,now);addSale(s,draft(),now);assert.deepEqual(s,before);
+  assert.throws(()=>finalizeDay(s,date,new Date(2026,10,1,0)),/日付が変わりました/);assert.deepEqual(s,before);
+  const empty=setup();finalizeDay(empty,date,now);assert.equal(closedDay(empty,date).totalYen,0);validateState(empty);
+});
+test('確定済みの記録は復元でも削除・変更不可、翌日と設定の変更は可能',()=>{
+  const s=setup(),now=new Date(2026,9,31,16),date=localDate(now);addSale(s,draft(),now);finalizeDay(s,date,now);
+  assert.deepEqual(parseBackup(backupJSON(s)),s);
+  const change=copy(s);change.settings.colors[0].category='変更';addSale(change,draft('next'),new Date(2026,10,1,9));assert.doesNotThrow(()=>assertClosedDaysPreserved(s,change));
+  for(const mutate of [t=>delete t.closedDays,t=>t.closedDays[0].finalizedAt=new Date(2026,9,31,17).toISOString(),t=>t.receipts[0].items[0].genreLabel='書き換え',t=>t.receipts=[],t=>t.voids.push({id:'v',receiptId:t.receipts[0].id})]){
+    const bad=copy(s);mutate(bad);assert.throws(()=>assertClosedDaysPreserved(s,bad),/確定済み売上/);
+  }
+  const reordered=JSON.parse(JSON.stringify(s),(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.entries(value).reverse()):value);
+  assert.doesNotThrow(()=>assertClosedDaysPreserved(s,reordered));
+});
+test('確定記録の壊れた合計・重複・日付を拒否し、確定機能追加前のバックアップも読める',()=>{
+  const old=setup();delete old.closedDays;delete old.predictions;assert.deepEqual(parseBackup(backupJSON(old)),old);
+  const s=setup(),now=new Date(2026,9,31,16);addSale(s,draft(),now);finalizeDay(s,localDate(now),now);
+  for(const mutate of [t=>t.closedDays[0].totalYen++,t=>t.closedDays[0].receiptCount=-1,t=>t.closedDays.push(copy(t.closedDays[0])),t=>t.closedDays[0].businessDate='2026-02-31',t=>t.closedDays[0].finalizedAt='bad']){
+    const bad=copy(s);mutate(bad);assert.throws(()=>parseBackup(backupJSON(bad)));
+  }
+});
