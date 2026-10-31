@@ -1,8 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {salesSummary,pieGradient,pieLabels} from '../src/sales-summary.js';
+import {salesSummary,pieGradient,pieLabels,previousBusinessDate} from '../src/sales-summary.js';
 const receipt=(id,hour,items,date='2026-10-30')=>({id,businessDate:date,committedAt:new Date(2026,9,30,hour,15).toISOString(),items,totalYen:items.reduce((s,i)=>s+i.lineTotalYen,0),quantityTotal:items.reduce((s,i)=>s+i.quantity,0)});
 const item=(genreLabel,amount=100,quantity=1,colorHex='#e85c63')=>({genreLabel,lineTotalYen:amount,quantity,colorHex});
+
+test('前日は現地の暦日で求め、月初・年初・うるう年と日付境界を扱う',()=>{
+  for(const [date,expected] of [['2026-11-01T00:00:00','2026-10-31'],['2026-11-01T23:59:59','2026-10-31'],['2027-01-01T09:00:00','2026-12-31'],['2024-03-01T09:00:00','2024-02-29'],['2026-03-01T09:00:00','2026-02-28']]){
+    const now=new Date(date),before=now.getTime();assert.equal(previousBusinessDate(now),expected);assert.equal(now.getTime(),before);
+  }
+});
 test('白い値札の漫画・その他・CDはグラフだけ別の色にする',()=>{
   const items=[['white','漫画'],['so','その他'],['cd','CD']].map(([colorId,name])=>({...item(name,100,1,'#ffffff'),colorId}));
   const state={receipts:[receipt('colors',9,items)],voids:[]},before=JSON.stringify(state);
@@ -48,4 +54,21 @@ test('小区画・長い項目名は省略せず欄外とし、空や単一分�
   assert.equal(pieLabels([{amountYen:100}],[{width:42,height:38}],300)[0].inside,true);
   assert.deepEqual(pieLabels([],[],300),[]);
   assert.equal(pieLabels([{amountYen:0}],[{width:42,height:38}],300)[0].inside,false);
+});
+
+
+test('2日間の品目と同じ時間帯を合算し、訂正は元の販売時刻に置く',()=>{
+ const first=receipt('first',9,[item('文庫',300)],'2026-10-31');
+ const second={...receipt('second',10,[item('漫画',400)],'2026-11-01'),committedAt:new Date(2026,10,1,10,15).toISOString()};
+ const amendment={...receipt('fixed',23,[item('文庫',100)],'2026-10-31'),saleOccurredAt:first.committedAt,correctionOfId:'first'};
+ const s={receipts:[first,second,amendment],voids:[{receiptId:'first'}]},summary=salesSummary(s,['2026-10-31','2026-11-01']);
+ assert.equal(summary.totalYen,500);assert.deepEqual(summary.hours.map(h=>[h.hour,h.amountYen]),[[9,100],[10,400]]);
+});
+
+
+test('通算の時間帯別は日別金額を同じ枠に保持し、売上のない日と時間帯を0にする',()=>{
+ const a=receipt('a',9,[item('文庫',300)],'2026-10-31'),b=receipt('b',11,[item('漫画',600)],'2026-11-01');
+ const summary=salesSummary({receipts:[a,b],voids:[]},['2026-10-31','2026-11-01']);
+ assert.deepEqual(summary.hours.map(h=>h.days.map(d=>d.amountYen)),[[300,0],[0,0],[0,600]]);
+ for(const h of summary.hours){assert.equal(h.days.reduce((n,d)=>n+d.amountYen,0),h.amountYen);assert.equal(h.days.reduce((n,d)=>n+d.quantity,0),h.quantity);}
 });

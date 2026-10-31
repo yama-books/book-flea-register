@@ -1,9 +1,9 @@
-import {initialState,copy,validateState,addSale,migrateMarkers,assertClosedDaysPreserved,assertRecordedDataPreserved} from './calculation.js';
+import {initialState,copy,validateState,addSale,migrateMarkers,assertClosedDaysPreserved,assertRecordedDataPreserved} from './calculation.js?v=20261031-amendments';
 import {addPrediction} from './sales-forecast.js';
 export function openStore(name = 'book-flea-register-v1') {
   return new Promise((resolve,reject)=>{
     if (!globalThis.indexedDB) return reject(new Error('このブラウザでは保存できません。通常のSafariで開いてください。'));
-    const req=indexedDB.open(name,2);
+    const req=indexedDB.open(name,3);
     req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('register'))req.result.createObjectStore('register');};
     req.onerror=()=>reject(new Error('端末の保存領域を開けません。プライベートブラウズを避け、空き容量を確認してください。'));
     req.onblocked=()=>reject(new Error('別のタブを閉じてから再読込してください。'));

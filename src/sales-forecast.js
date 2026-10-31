@@ -3,6 +3,14 @@ import {activeReceipts,salesTotal,localDate,integer,closedDay} from './calculati
 export const EVENT_DAYS=Object.freeze(['2026-10-31','2026-11-01']);
 export const OPEN_TIME='09:00';
 export const CLOSE_TIME='16:30';
+export function eventSales(state){
+  const active=activeReceipts(state);
+  const days=EVENT_DAYS.map(businessDate=>{
+    const receipts=active.filter(r=>r.businessDate===businessDate);
+    return {businessDate,finalized:Boolean(closedDay(state,businessDate)),totalYen:salesTotal(receipts),quantityTotal:receipts.reduce((n,r)=>integer(n+r.quantityTotal,0,Number.MAX_SAFE_INTEGER),0),receiptCount:receipts.length};
+  });
+  return {available:days[1].finalized,complete:days.every(d=>d.finalized),days,totalYen:salesTotal(days),quantityTotal:days.reduce((n,d)=>integer(n+d.quantityTotal,0,Number.MAX_SAFE_INTEGER),0),receiptCount:days.reduce((n,d)=>n+d.receiptCount,0)};
+}
 const minute=60_000;
 const hours=date=>({open:new Date(`${date}T${OPEN_TIME}:00`),close:new Date(`${date}T${CLOSE_TIME}:00`)});
 const safeEstimate=value=>Number.isSafeInteger(Math.round(value))&&value>=0?Math.round(value):null;

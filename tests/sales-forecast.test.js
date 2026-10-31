@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialState,copy,addSale,voidSale,localDate,finalizeDay,backupJSON,parseBackup,validateState,assertRecordedDataPreserved} from '../src/calculation.js';
-import {salesForecast,addPrediction,previousPredictions} from '../src/sales-forecast.js';
+import {salesForecast,addPrediction,previousPredictions,eventSales} from '../src/sales-forecast.js';
 
 const at=(day,hour=10,minute=30)=>new Date(2026,day==='31'?9:10,Number(day),hour,minute);
 const item={priceId:'p100',unitPriceYen:100,quantity:9,colorId:'red',colorLabel:'赤',colorHex:'#e85c63',genreId:null,genreLabel:'文庫',lineTotalYen:900};
@@ -55,4 +55,17 @@ test('前日の会計・取消・予測は削除も書換えも並べ替えも�
     const bad=copy(s);mutate(bad);assert.throws(()=>assertRecordedDataPreserved(s,bad),/保存済み/);
   }
   const changedSettings=copy(s);changedSettings.settings.colors[0].category='絵本';assert.doesNotThrow(()=>assertRecordedDataPreserved(s,changedSettings));
+});
+
+
+test('2日目確定で通算を公開し、両日実績を合算して確定後訂正も追従する',()=>{
+ const s=initialState();assert.equal(eventSales(s).available,false);
+ sale(s,'one',at('31'),9);sale(s,'two',at('01'),6);sale(s,'outside',new Date(2026,9,30,10),2);
+ finalizeDay(s,localDate(at('31')),at('31',16,30));assert.equal(eventSales(s).available,false);
+ finalizeDay(s,localDate(at('01')),at('01',16,30));const total=eventSales(s);
+ assert.equal(total.available,true);assert.equal(total.complete,true);assert.equal(total.totalYen,1500);assert.equal(total.quantityTotal,15);assert.equal(total.receiptCount,2);
+ addSale(s,{id:'amended',correctionOfId:'one',items:[{...item,quantity:3,lineTotalYen:300}],receivedYen:300},at('01',17));
+ assert.equal(eventSales(s).totalYen,900);assert.deepEqual(eventSales(s).days.map(d=>d.totalYen),[300,600]);
+ assert.equal(s.receipts.find(r=>r.id==='amended').businessDate,'2026-10-31');assert.deepEqual(parseBackup(backupJSON(s)),s);
+ const missing=initialState();finalizeDay(missing,localDate(at('01')),at('01',16,30));assert.equal(eventSales(missing).available,true);assert.equal(eventSales(missing).complete,false);
 });

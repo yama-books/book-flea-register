@@ -23,14 +23,19 @@ test('6マーク版(markerVersion2)から価格対応を保ったままCDと分�
 test('CDマークの会計を保存でき、分類snapshotは設定変更で変わらない',()=>{const s=setup(),cd={...item(200),colorId:'cd',colorLabel:'CD',colorHex:'#ffffff',genreId:null,genreLabel:'CD'};addSale(s,draft('cd',[cd],200));s.settings.colors.find(c=>c.id==='cd').category='レコード';validateState(s);assert.equal(s.receipts[0].items[0].genreLabel,'CD');assert.ok(exportCSV(s).includes('"CD"'));});
 test('お預かり候補は合計を500円・千円・五千円・一万円単位で切り上げ、ちょうどの額と重複を除く',()=>{assert.deepEqual(tenderCandidates(300),[500,1000,5000,10000]);assert.deepEqual(tenderCandidates(1300),[1500,2000,5000,10000]);assert.deepEqual(tenderCandidates(1800),[2000,5000,10000]);assert.deepEqual(tenderCandidates(1000),[5000,10000]);assert.deepEqual(tenderCandidates(500),[1000,5000,10000]);assert.deepEqual(tenderCandidates(12300),[12500,13000,15000,20000]);assert.deepEqual(tenderCandidates(10000),[]);assert.deepEqual(tenderCandidates(0),[]);for(const bad of [-100,1.5,NaN])assert.throws(()=>tenderCandidates(bad));});
 
-test('当日確定は取消を除いた合計と点数を保存し、会計追加・取消・翌日からの訂正を拒否',()=>{
-  const s=setup(),now=new Date(2026,9,31,16),date=localDate(now);
-  addSale(s,draft('active'),now);addSale(s,draft('voided'),now);voidSale(s,'voided','取消',now);
-  finalizeDay(s,date,now);assert.deepEqual(closedDay(s,date),{businessDate:date,finalizedAt:now.toISOString(),totalYen:600,quantityTotal:3,receiptCount:1});
-  const before=copy(s);assert.throws(()=>addSale(s,draft('late'),now),/確定済み/);assert.throws(()=>voidSale(s,'active','取消',now),/確定済み/);
-  const nextDay=new Date(2026,10,1,9);assert.throws(()=>addSale(s,{...draft('correction'),correctionOfId:'active'},nextDay),/確定済み/);
-  assert.deepEqual(s,before);addSale(s,draft('tomorrow'),nextDay);assert.equal(s.receipts.at(-1).businessDate,localDate(nextDay));validateState(s);
+test('確定後は新規会計を拒否し、取消と翌日からの訂正は追記して元の日に反映する',()=>{
+ const s=setup(),now=new Date(2026,9,31,16),date=localDate(now);
+ addSale(s,draft('active'),now);addSale(s,draft('voided'),now);voidSale(s,'voided','取消',now);finalizeDay(s,date,now);
+ const before=copy(s);assert.deepEqual(closedDay(s,date),{businessDate:date,finalizedAt:now.toISOString(),receiptIds:['active'],totalYen:600,quantityTotal:3,receiptCount:1});
+ assert.throws(()=>addSale(s,draft('late'),now),/確定済み/);
+ const next=new Date(2026,10,1,9);addSale(s,{...draft('corrected',[item(100)],100),correctionOfId:'active'},next);
+ assert.equal(s.receipts.at(-1).businessDate,date);assert.equal(s.receipts.at(-1).saleOccurredAt,now.toISOString());assert.equal(salesTotal(activeReceipts(s)),100);
+ assert.deepEqual(s.receipts[0],before.receipts[0]);assert.deepEqual(closedDay(s,date),closedDay(before,date));assertClosedDaysPreserved(before,s);validateState(s);
+ voidSale(s,'corrected','確定後の取消',next);assert.equal(salesTotal(activeReceipts(s)),0);validateState(s);
+ assert.deepEqual(parseBackup(backupJSON(s)),s);
+ const legacy=copy(s);delete legacy.closedDays[0].receiptIds;validateState(legacy);
 });
+
 test('確定の再実行と同じ会計IDの再試行は冪等、確認中の日付変更は確定しない',()=>{
   const s=setup(),now=new Date(2026,9,31,16),date=localDate(now);addSale(s,draft(),now);finalizeDay(s,date,now);
   const before=copy(s);finalizeDay(s,date,now);addSale(s,draft(),now);assert.deepEqual(s,before);
@@ -41,8 +46,8 @@ test('確定済みの記録は復元でも削除・変更不可、翌日と設�
   const s=setup(),now=new Date(2026,9,31,16),date=localDate(now);addSale(s,draft(),now);finalizeDay(s,date,now);
   assert.deepEqual(parseBackup(backupJSON(s)),s);
   const change=copy(s);change.settings.colors[0].category='変更';addSale(change,draft('next'),new Date(2026,10,1,9));assert.doesNotThrow(()=>assertClosedDaysPreserved(s,change));
-  for(const mutate of [t=>delete t.closedDays,t=>t.closedDays[0].finalizedAt=new Date(2026,9,31,17).toISOString(),t=>t.receipts[0].items[0].genreLabel='書き換え',t=>t.receipts=[],t=>t.voids.push({id:'v',receiptId:t.receipts[0].id})]){
-    const bad=copy(s);mutate(bad);assert.throws(()=>assertClosedDaysPreserved(s,bad),/確定済み売上/);
+  for(const mutate of [t=>delete t.closedDays,t=>t.closedDays[0].finalizedAt=new Date(2026,9,31,17).toISOString(),t=>t.receipts[0].items[0].genreLabel='書き換え',t=>t.receipts=[]]){
+    const bad=copy(s);mutate(bad);assert.throws(()=>assertClosedDaysPreserved(s,bad),/確定|保存済み/);
   }
   const reordered=JSON.parse(JSON.stringify(s),(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.entries(value).reverse()):value);
   assert.doesNotThrow(()=>assertClosedDaysPreserved(s,reordered));

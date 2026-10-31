@@ -1,5 +1,5 @@
 import {copy} from './calculation.js';
-import {openStore,readState,changeState} from './storage.js';
+import {openStore,readState,changeState} from './storage.js?v=20261031-amendments';
 export const PRACTICE_DB='book-flea-register-practice-v1';
 export const draftKey=practice=>practice?'book-flea-register-practice-draft':'book-flea-register-draft';
 // 設定だけを本番から複写する。会計・取消・採番は一切混ぜない。

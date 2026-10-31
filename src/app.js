@@ -1,11 +1,11 @@
-import {COLORS,copy,initialState,integer,parseMoney,totals,localDate,activeReceipts,salesTotal,validateSettings,voidSale,backupJSON,parseBackup,exportCSV,categoryOf,tenderCandidates,MAX_QUANTITY,MAX_CATEGORY,closedDay,finalizeDay} from './calculation.js';
-import {openStore,readState,changeState,saveSale,restoreState,savePrediction} from './storage.js';
-import {salesForecast,previousPredictions,EVENT_DAYS} from './sales-forecast.js';
+import {COLORS,copy,initialState,integer,parseMoney,totals,localDate,activeReceipts,salesTotal,validateSettings,voidSale,backupJSON,parseBackup,exportCSV,categoryOf,tenderCandidates,MAX_QUANTITY,MAX_CATEGORY,closedDay,finalizeDay} from './calculation.js?v=20261031-amendments';
+import {openStore,readState,changeState,saveSale,restoreState,savePrediction} from './storage.js?v=20261031-amendments';
+import {salesForecast,previousPredictions,EVENT_DAYS,eventSales} from './sales-forecast.js?v=20261031-event-total';
 import {setupCustomerControls} from './customer-controls.js';
-import {openPractice,draftKey,practiceBackup} from './practice.js';
+import {openPractice,draftKey,practiceBackup} from './practice.js?v=20261031-amendments';
 import {setupStaffCall} from './staff-call.js';
 import {setupFullscreen} from './menu.js';
-import {salesSummary,pieGradient,pieLabels} from './sales-summary.js';
+import {salesSummary,pieGradient,pieLabels,previousBusinessDate} from './sales-summary.js?v=20261031-two-day-bars';
 import {animatePie,animateCharts} from './chart-motion.js';
 const $=s=>document.querySelector(s);
 const yen=n=>new Intl.NumberFormat('ja-JP').format(n)+'円';
@@ -14,13 +14,13 @@ const uid=()=>globalThis.crypto.randomUUID?.() || Array.from(crypto.getRandomVal
 const blank=()=>({id:uid(),items:[],received:'',correctionOfId:null});
 const key=i=>JSON.stringify([i.priceId,i.unitPriceYen,i.colorId,i.genreId,i.genreLabel]);
 let db,liveDb,practiceDb,practice=false,state=initialState(),draft=blank(),busy=false,ready=false,editor,historyLimit=20,pendingConfirm,lastSale=null;
-let stopPieMotion=()=>{};
-let summarySignature='';
+const summaryViews=new WeakMap();
+let previousRecordDate='',previousHistoryLimit=20,recordView='previous',summaryScope='day';
 let pendingPrediction=null,savedPredictionId=null;
 const customerDisplay=setupCustomerControls();
 setupStaffCall({isPractice:()=>practice});setupFullscreen();
 function notify(message,error=false){$('#notice').textContent=(practice?'【練習】':'')+message;$('#notice').classList.toggle('error',error);}
-function saleLocked(){return Boolean(closedDay(state)||draft.correctionOfId&&closedDay(state,state.receipts.find(r=>r.id===draft.correctionOfId)?.businessDate));}
+function saleLocked(){return !draft.correctionOfId&&Boolean(closedDay(state));}
 function persistDraft(){try{sessionStorage.setItem(draftKey(practice),JSON.stringify(draft));}catch{notify('会計の途中保存が使えません。再読込すると未確定の入力が消えることがあります。',true);}}
 function recoverDraft(){try{const data=JSON.parse(sessionStorage.getItem(draftKey(practice)));if(data && typeof data.id==='string' && Array.isArray(data.items) && typeof data.received==='string'){totals(data.items);draft=data;}}catch{notify('途中の会計を復元できませんでした。未確定の入力をご確認ください。',true);}}
 // 分類名は確定時のsnapshotとして明細へ残すが、レジ画面には表示しない。
@@ -65,7 +65,7 @@ function renderPayment(){
   if(received===null)error=draft.received?'整数の金額を入力してください':'お預かり金額を入力してください';
   if(!draft.items.length)error='マークをタップしてください';
   else if(received!==null && received<totalYen)error=`あと${yen(totalYen-received)}不足しています`;
-  if(saleLocked())error='売上は確定済みです。追加・取消・訂正はできません。';
+  if(saleLocked())error='売上は確定済みです。修正する会計を履歴から選んでください。';
   $('#received-view').textContent=received===null?'—':yen(received);
   $('#change').textContent=changeYen===null?'—':yen(changeYen);
   $('#payment-hint').textContent=error || (draft.correctionOfId?'元の会計を取消し、この内容へ差し替えます':'内容を確認して「完了」を押してください');
@@ -81,23 +81,32 @@ function renderPayment(){
 function renderDayStatus(date=localDate()){
   const finalized=closedDay(state,date);
   $('#finalize-day').disabled=busy||!ready||Boolean(finalized)||Boolean(draft.items.length||draft.received||draft.correctionOfId);
+  $('#event-total').hidden=!eventSales(state).available;$('#event-total').disabled=busy||!ready;
   $('#finalize-day').textContent=finalized?'当日の売上は確定済み':practice?'練習の売上を確定':'当日の売上を確定';
-  $('#day-status').textContent=finalized?`${new Date(finalized.finalizedAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}に確定しました。変更はできません。CSV・バックアップは保存できます。`:draft.items.length||draft.received||draft.correctionOfId?'途中の会計を完了するか、やりなおしてから売上を確定してください。':'営業が終わったら確定します。確定後は、この日の売上を変更できません。';
+  $('#day-status').textContent=finalized?`${new Date(finalized.finalizedAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}に確定（確定時 ${yen(finalized.totalYen)}）。履歴から取消・訂正できます。`:draft.items.length||draft.received||draft.correctionOfId?'途中の会計を完了するか、やりなおしてから売上を確定してください。':'営業が終わったら確定します。確定後も履歴から取消・訂正できます。';
+}
+function receiptHTML(r,{readOnly=false}={}){
+    const v=state.voids.find(v=>v.receiptId===r.id);
+    return `<article class="history-item ${v?'voided':''}"><div class="history-top"><span>#${String(r.receiptNo).padStart(4,'0')} ${v?'<span class="void-badge">取消済み</span>':''}</span><strong>${yen(r.totalYen)}</strong></div><p class="history-meta">${new Date(r.committedAt).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} · ${r.quantityTotal}点${r.correctionOfId?' · 訂正会計':''}</p><details><summary>明細・お預かりを見る</summary>${r.items.map(i=>`<p>${esc(i.colorLabel)} / ${esc(i.genreLabel)}<br>${yen(i.unitPriceYen)} × ${i.quantity}点 = ${yen(i.lineTotalYen)}</p>`).join('')}<p>お預かり ${yen(r.receivedYen)} / お釣り ${yen(r.changeYen)}<br>確定時の累計 ${yen(r.cumulativeAtCommitYen)}</p>${v?`<p>取消: ${esc(v.reason)}<br>${new Date(v.voidedAt).toLocaleString('ja-JP')}</p>`:readOnly?'<p class="closed-day-label">閲覧のみ</p>':`<button data-correct="${esc(r.id)}" ${busy?'disabled':''}>訂正</button><button data-void="${esc(r.id)}" ${busy?'disabled':''}>取消</button>`}</details></article>`;
 }
 function renderHistory(){
   const date=localDate(),valid=activeReceipts(state),today=valid.filter(r=>r.businessDate===date);
   $('#today-date').textContent=new Date().toLocaleDateString('ja-JP',{month:'numeric',day:'numeric',weekday:'short'});
   $('#today-total').innerHTML=`${new Intl.NumberFormat('ja-JP').format(salesTotal(today))} <span>円</span>`;
   $('#today-count').textContent=`${today.reduce((s,r)=>s+r.quantityTotal,0)}点 · ${today.length}回のお会計`;
+  const twoDays=eventSales(state),secondDay=date===EVENT_DAYS[1];
+  $('#today-kicker').textContent=secondDay?'本日（2日目）':'合計';
+  $('#event-running-total').hidden=!secondDay;
+  $('#event-running-amount').textContent=yen(twoDays.totalYen);
+  $('#event-running-note').textContent='1日目 '+yen(twoDays.days[0].totalYen)+' ＋ 本日 '+yen(twoDays.days[1].totalYen);
+  $('#summary-scope').hidden=!secondDay;if(!secondDay)summaryScope='day';
+  for(const button of document.querySelectorAll('[data-scope]'))button.setAttribute('aria-pressed',String(button.dataset.scope===summaryScope));
   renderDayStatus(date);
-  const latest=state.receipts.at(-1),isActive=latest&&!closedDay(state,latest.businessDate)&&!state.voids.some(v=>v.receiptId===latest.id);
+  const latest=state.receipts.at(-1),isActive=latest&&!state.voids.some(v=>v.receiptId===latest.id);
   $('#last-action').innerHTML=isActive?`<button class="quiet" data-void="${esc(latest.id)}" ${busy?'disabled':''}>直前の会計 #${String(latest.receiptNo).padStart(4,'0')} を取消</button>`:'';
-  $('#history').innerHTML=state.receipts.length?[...state.receipts].reverse().slice(0,historyLimit).map(r=>{
-    const v=state.voids.find(v=>v.receiptId===r.id);
-    return `<article class="history-item ${v?'voided':''}"><div class="history-top"><span>#${String(r.receiptNo).padStart(4,'0')} ${v?'<span class="void-badge">取消済み</span>':''}</span><strong>${yen(r.totalYen)}</strong></div><p class="history-meta">${new Date(r.committedAt).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} · ${r.quantityTotal}点${r.correctionOfId?' · 訂正会計':''}</p><details><summary>明細・お預かりを見る</summary>${r.items.map(i=>`<p>${esc(i.colorLabel)} / ${esc(i.genreLabel)}<br>${yen(i.unitPriceYen)} × ${i.quantity}点 = ${yen(i.lineTotalYen)}</p>`).join('')}<p>お預かり ${yen(r.receivedYen)} / お釣り ${yen(r.changeYen)}<br>確定時の累計 ${yen(r.cumulativeAtCommitYen)}</p>${v?`<p>取消: ${esc(v.reason)}<br>${new Date(v.voidedAt).toLocaleString('ja-JP')}</p>`:closedDay(state,r.businessDate)?'<p class="closed-day-label">売上確定済み</p>':`<button data-correct="${esc(r.id)}" ${busy?'disabled':''}>訂正</button><button data-void="${esc(r.id)}" ${busy?'disabled':''}>取消</button>`}</details></article>`;
-  }).join(''):'<div class="empty-history">まだ売上の記録はありません。<br>「完了」を押すと、ここに残ります。</div>';
+  $('#history').innerHTML=state.receipts.length?[...state.receipts].reverse().slice(0,historyLimit).map(r=>receiptHTML(r)).join(''):'<div class="empty-history">まだ売上の記録はありません。<br>「完了」を押すと、ここに残ります。</div>';
   $('#more-history').hidden=state.receipts.length<=historyLimit;
-  renderSummary(date);
+  renderSummary(summaryScope==='event'?EVENT_DAYS:date);
   $('#csv').disabled=busy||!ready;$('#backup').disabled=busy||!ready;
 }
 function placePieLabels(target,groups){
@@ -117,34 +126,70 @@ function placePieLabels(target,groups){
   if(globalThis.ResizeObserver){const observer=new ResizeObserver(update);observer.observe(wrap);return ()=>observer.disconnect();}
   window.addEventListener('resize',update);return ()=>window.removeEventListener('resize',update);
 }
-function renderSummary(date=localDate()){
-  const data=salesSummary(state,date),target=$('#summaries');
-  const signature=JSON.stringify([practice,$('#summary-mode').value,data]);
-  if(signature===summarySignature)return;
-  summarySignature=signature;
-  stopPieMotion();stopPieMotion=()=>{};
-  if(!data.totalYen){target.innerHTML='<p class="summary-empty">まだ記録はありません。会計を保存すると表示します。</p>';return;}
-  if($('#summary-mode').value==='hourly'){
-    const max=Math.max(...data.hours.map(h=>h.amountYen));
-    target.innerHTML='<h4>時間帯別の売上（1時間ごと）</h4><p class="mini-note">会計を完了した時刻で集計します。</p><div class="hour-chart">'+data.hours.map(h=>`<div class="hour-row"><span>${String(h.hour).padStart(2,'0')}〜${String(h.hour+1).padStart(2,'0')}時</span><div class="hour-track" aria-hidden="true"><div style="width:${h.amountYen/max*100}%"></div></div><strong>${yen(h.amountYen)}</strong><small>${h.quantity}点 · ${h.receipts}会計</small></div>`).join('')+'</div>';
-    stopPieMotion=animateCharts(target.querySelectorAll('.hour-row'));
-    return;
+function renderSummary(date=summaryScope==='event'?EVENT_DAYS:localDate(),target=$('#summaries'),mode=$('#summary-mode').value){
+  const data=salesSummary(state,date);
+  const signature=JSON.stringify([practice,date,mode,data]);
+  if(signature===summaryViews.get(target)?.signature)return;
+  summaryViews.get(target)?.stop();
+  const view={signature,stop:()=>{}};summaryViews.set(target,view);
+  if(!data.totalYen){target.innerHTML=`<p class="summary-empty">${date===localDate()?'まだ記録はありません。会計を保存すると表示します。':'この日の有効な売上はありません。'}</p>`;return;}
+  if(mode==='hourly'){
+    const comparison=Array.isArray(date),dayColors=['#538ebd','#398c71'];
+    const max=Math.max(...data.hours.flatMap(h=>comparison?h.days.map(d=>d.amountYen):[h.amountYen]));
+    const legend=comparison?'<div class="hour-day-legend">'+date.map((day,i)=>'<span><i style="background:'+dayColors[i]+'"></i>'+esc(day.slice(5).replace('-','/'))+'</span>').join('')+'</div>':'';
+    target.innerHTML='<h4>時間帯別の売上（1時間ごと）</h4><p class="mini-note">'+(comparison?'各時間帯に10/31（青）・11/1（緑）を同じ目盛りで表示。':'')+'訂正は元の販売時間帯に反映します。</p>'+legend+'<div class="hour-chart">'+data.hours.map(h=>{
+      const bars=comparison?'<div class="hour-days">'+h.days.map((day,i)=>'<div class="hour-day-line"><span>'+esc(day.businessDate.slice(5).replace('-','/'))+'</span><div class="hour-track" aria-hidden="true"><div style="width:'+(max?day.amountYen/max*100:0)+'%;background:'+dayColors[i]+'"></div></div><strong>'+yen(day.amountYen)+'</strong></div>').join('')+'</div>':'<div class="hour-track" aria-hidden="true"><div style="width:'+h.amountYen/max*100+'%"></div></div>';
+      return '<div class="hour-row"><span>'+String(h.hour).padStart(2,'0')+'〜'+String(h.hour+1).padStart(2,'0')+'時</span><strong>'+yen(h.amountYen)+'</strong>'+bars+'<small>'+h.quantity+'点 · '+h.receipts+'会計'+(comparison?'（2日間）':'')+'</small></div>';
+    }).join('')+'</div>';
+    view.stop=animateCharts(target.querySelectorAll('.hour-row'));return;
   }
   const description=data.categories.map(g=>`${g.name} ${yen(g.amountYen)}`).join('、');
-  target.innerHTML=`<h4>分類別の売上金額</h4><div class="category-chart"><div class="pie-wrap"><div id="sales-pie" class="sales-pie" role="img" aria-label="${esc(description)}"></div><div class="pie-center" aria-hidden="true"><span>売上合計</span><strong>${yen(data.totalYen)}</strong><small>${data.categories.reduce((sum,g)=>sum+g.quantity,0)}点</small></div><div class="pie-labels" aria-hidden="true">${data.categories.map(g=>`<span class="pie-label"><span>${esc(g.name)}</span><strong>${(g.amountYen/data.totalYen*100).toFixed(1)}%</strong></span>`).join('')}</div></div><div class="chart-legend">${data.categories.map(g=>`<div class="legend-row"><span class="legend-dot" style="background:${g.color}" aria-hidden="true"></span><span>${esc(g.name)}<small>${g.quantity}点 · ${(g.amountYen/data.totalYen*100).toFixed(1)}%</small></span><strong>${yen(g.amountYen)}</strong></div>`).join('')}</div></div>`;
-  $('#sales-pie').style.background=pieGradient(data.categories);
-  const stopLabels=placePieLabels(target,data.categories),stopMotion=animatePie($('#sales-pie'));
-  stopPieMotion=()=>{stopLabels();stopMotion();};
+  target.innerHTML=`<h4>${Array.isArray(date)?'品目別の売上金額（2日間）':'分類別の売上金額'}</h4><div class="category-chart"><div class="pie-wrap"><div class="sales-pie" role="img" aria-label="${esc(description)}"></div><div class="pie-center" aria-hidden="true"><span>${Array.isArray(date)?'2日間通算':'売上合計'}</span><strong>${yen(data.totalYen)}</strong><small>${data.categories.reduce((sum,g)=>sum+g.quantity,0)}点</small></div><div class="pie-labels" aria-hidden="true">${data.categories.map(g=>`<span class="pie-label"><span>${esc(g.name)}</span><strong>${(g.amountYen/data.totalYen*100).toFixed(1)}%</strong></span>`).join('')}</div></div><div class="chart-legend">${data.categories.map(g=>`<div class="legend-row"><span class="legend-dot" style="background:${g.color}" aria-hidden="true"></span><span>${esc(g.name)}<small>${g.quantity}点 · ${(g.amountYen/data.totalYen*100).toFixed(1)}%</small></span><strong>${yen(g.amountYen)}</strong></div>`).join('')}</div></div>`;
+  target.querySelector('.sales-pie').style.background=pieGradient(data.categories);
+  const stopLabels=placePieLabels(target,data.categories),stopMotion=animatePie(target.querySelector('.sales-pie'));
+  view.stop=()=>{stopLabels();stopMotion();};
 }
 $('#summary-mode').addEventListener('change',()=>renderSummary());
+$('#summary-scope').addEventListener('click',event=>{const button=event.target.closest('[data-scope]');if(!button||busy||localDate()!==EVENT_DAYS[1])return;summaryScope=button.dataset.scope;renderHistory();});
 function render(){
   document.body.classList.toggle('practice-mode',practice);$('#practice-banner').hidden=!practice;
   $('#toggle-practice').textContent=practice?'本番モードに戻る':'練習モード';$('#toggle-practice').disabled=busy||!ready;
   $('#today-title').textContent=practice?'練習の記録（本番の売上には含みません）':'きょうの売上';
   $('#history-title').firstChild.textContent=practice?'練習の記録 ':'売上の記録 ';
   renderColors();renderCart();renderHistory();
+  $('#open-previous-day').disabled=busy||!ready;
+  if($('#previous-day-dialog').open)renderPreviousDay();
   if($('#forecast-dialog').open)renderForecast();
 }
+function renderPreviousDay(){
+  const event=eventSales(state),date=recordView==='event'?EVENT_DAYS:previousBusinessDate(),dates=Array.isArray(date)?date:[date],scope=JSON.stringify(date);
+  if(previousRecordDate!==scope){previousRecordDate=scope;previousHistoryLimit=20;}
+  const receipts=state.receipts.filter(r=>dates.includes(r.businessDate)),active=activeReceipts(state).filter(r=>dates.includes(r.businessDate)),finalized=closedDay(state,dates[0]);
+  $('#previous-day-date').textContent=recordView==='event'?'2026年10月31日・11月1日':new Date(date+'T12:00:00').toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
+  $('#previous-day-title').textContent=(recordView==='event'?'2日間の通算':practice?'前日の練習記録':'前日の記録')+(recordView==='event'&&practice?'（練習）':'');
+  $('#previous-day-dialog .sales-summary').setAttribute('aria-label',recordView==='event'?'2日間の売上合計':'前日の売上合計');
+  $('#previous-day-dialog .summary-picker span').textContent=recordView==='event'?'2日間の内訳の表示':'前日の内訳の表示';
+  $('#record-day-totals').hidden=recordView!=='event';
+  $('#record-day-totals').innerHTML=recordView==='event'?event.days.map(day=>`<div><span>${esc(day.businessDate.slice(5).replace('-','/'))} · ${day.finalized?'確定済み':'未確定'}</span><strong>${yen(day.totalYen)}</strong><small>${day.quantityTotal}点 · ${day.receiptCount}会計</small></div>`).join(''):'';
+  $('#previous-day-total').innerHTML=new Intl.NumberFormat('ja-JP').format(salesTotal(active))+' <span>円</span>';
+  $('#previous-day-count').textContent=active.reduce((sum,r)=>sum+r.quantityTotal,0)+'点 · '+active.length+'回のお会計';
+  $('#previous-day-status').textContent=recordView==='event'?(event.complete?'両日確定済みの合計です。確定後の取消・訂正も反映します。':'1日目が未確定のため、現在の記録による合計です。'):(finalized?'売上確定済み · 履歴から取消・訂正できます。':receipts.length?'記録済みの売上':'この端末には前日の記録がありません。');
+  $('#previous-history').innerHTML=receipts.length?[...receipts].reverse().slice(0,previousHistoryLimit).map(r=>receiptHTML(r,{readOnly:recordView==='event'})).join(''):'<div class="empty-history">対象日の売上の記録はありません。</div>';
+  $('#more-previous-history').hidden=receipts.length<=previousHistoryLimit;
+  renderSummary(date,$('#previous-summaries'),$('#previous-summary-mode').value);
+}
+$('#open-previous-day').addEventListener('click',()=>{
+  if(busy||!ready)return;
+  recordView='previous';previousHistoryLimit=20;$('#previous-summary-mode').value='category';
+  $('#previous-day-dialog').showModal();renderPreviousDay();
+});
+$('#event-total').addEventListener('click',()=>{if(busy||!ready||!eventSales(state).available)return;recordView='event';previousHistoryLimit=20;$('#previous-summary-mode').value='category';$('#previous-day-dialog').showModal();renderPreviousDay();});
+$('#close-previous-day').addEventListener('click',()=>$('#previous-day-dialog').close());
+$('#previous-day-dialog').addEventListener('close',()=>{
+  const target=$('#previous-summaries');summaryViews.get(target)?.stop();summaryViews.delete(target);
+});
+$('#previous-summary-mode').addEventListener('change',()=>renderPreviousDay());
+$('#more-previous-history').addEventListener('click',()=>{previousHistoryLimit+=20;renderPreviousDay();});
 function renderForecast(){
   const forecast=salesForecast(state),amount=value=>value===null?'—':yen(value);
   $('#forecast-today').textContent=amount(forecast.todayEstimateYen);
@@ -227,7 +272,7 @@ async function commitDraft(){
   if(busy)return;busy=true;render();
   try{
     const saved=await saveSale(db,state.revision,{id:draft.id,items:draft.items,receivedYen:parseMoney(draft.received),correctionOfId:draft.correctionOfId});
-    const receipt=saved.receipts.find(r=>r.id===draft.id);state=saved;draft=blank();lastSale={amountYen:receipt.totalYen,receivedYen:receipt.receivedYen,changeYen:receipt.changeYen,done:true};persistDraft();notify(`会計 #${String(receipt.receiptNo).padStart(4,'0')} · ${yen(receipt.totalYen)} を保存しました。次のお客さんをどうぞ。`);broadcast();
+    const receipt=saved.receipts.find(r=>r.id===draft.id);state=saved;draft=blank();lastSale={amountYen:receipt.totalYen,receivedYen:receipt.receivedYen,changeYen:receipt.changeYen,done:true};persistDraft();notify(`会計 #${String(receipt.receiptNo).padStart(4,'0')} · ${yen(receipt.totalYen)} を保存しました。${receipt.correctionOfId?'訂正を反映しました。':'次のお客さんをどうぞ。'}`);broadcast();
   }catch(e){await refreshAfterError(e);}finally{busy=false;render();}
 }
 function download(content,type,name){
@@ -265,11 +310,10 @@ document.addEventListener('click',e=>{
   if(b.dataset.color)step(1,undefined,b.dataset.color);
   if('row' in b.dataset)step(Number(b.dataset.delta),Number(b.dataset.row));
   if('money' in b.dataset){draft.received=b.dataset.money==='exact'?String(totals(draft.items).totalYen):b.dataset.money;$('#received').value=draft.received;persistDraft();renderPayment();}
-  if(b.dataset.void){if(closedDay(state,state.receipts.find(r=>r.id===b.dataset.void)?.businessDate)){notify('確定済みの会計は取り消せません。',true);return;}const id=b.dataset.void,r=state.receipts.find(r=>r.id===id);confirmAction('会計を取消',`会計 #${String(r.receiptNo).padStart(4,'0')} · ${yen(r.totalYen)} を取消します。\n記録は消さず、売上集計から除きます。`,()=>runMutation(()=>changeState(db,state.revision,s=>voidSale(s,id,$('#reason').value.trim()||'操作間違い')),'会計を取消しました。記録は履歴に残っています。'),true);}
+  if(b.dataset.void){const id=b.dataset.void,r=state.receipts.find(r=>r.id===id);confirmAction('会計を取消',`会計 #${String(r.receiptNo).padStart(4,'0')} · ${yen(r.totalYen)} を取消します。\n記録は消さず、売上集計から除きます。`,()=>runMutation(()=>changeState(db,state.revision,s=>voidSale(s,id,$('#reason').value.trim()||'操作間違い')),'会計を取消しました。記録は履歴に残っています。'),true);}
   if(b.dataset.correct){
-    if(saleLocked()||closedDay(state,state.receipts.find(r=>r.id===b.dataset.correct)?.businessDate)){notify('確定済みの会計は訂正できません。',true);return;}
     if(draft.items.length||draft.correctionOfId){notify('現在の会計を完了するか「やりなおす」で空にしてください。',true);return;}
-    const r=state.receipts.find(r=>r.id===b.dataset.correct);confirmAction('会計を訂正',`会計 #${String(r.receiptNo).padStart(4,'0')} を編集します。\n「訂正を完了」するまで元の会計は有効なままです。`,()=>{draft={id:uid(),items:copy(r.items),received:String(r.receivedYen),correctionOfId:r.id};persistDraft();render();notify('訂正する明細の＋/−とお預かりを変更し、訂正を完了してください。');$('#checkout-title').scrollIntoView({block:'start'});});
+    const r=state.receipts.find(r=>r.id===b.dataset.correct);confirmAction('会計を訂正',`会計 #${String(r.receiptNo).padStart(4,'0')} を編集します。\n「訂正を完了」するまで元の会計は有効なままです。`,()=>{$('#previous-day-dialog').close();draft={id:uid(),items:copy(r.items),received:String(r.receivedYen),correctionOfId:r.id};persistDraft();render();notify('訂正する明細の＋/−とお預かりを変更し、訂正を完了してください。');$('#checkout-title').scrollIntoView({block:'start'});});
   }
   if('move' in b.dataset){const i=Number(b.dataset.move),j=i+Number(b.dataset.direction);[editor.prices[i],editor.prices[j]]=[editor.prices[j],editor.prices[i]];renderEditor();}
   if('remove' in b.dataset){const [removed]=editor.prices.splice(Number(b.dataset.remove),1);for(const c of editor.colors)if(c.priceId===removed.id)c.priceId='';renderEditor();}
@@ -311,7 +355,7 @@ $('#backup').addEventListener('click',saveBackup);
 $('#finalize-day').addEventListener('click',()=>{
   if($('#finalize-day').disabled)return;
   const date=localDate(),revision=state.revision,receipts=activeReceipts(state).filter(r=>r.businessDate===date);
-  confirmAction(practice?'練習の売上を確定':'当日の売上を確定',`${date} · ${yen(salesTotal(receipts))} · ${receipts.length}会計を確定します。\nこの日の会計追加・取消・訂正はできなくなります。元に戻す操作はありません。\n確定後にCSVとバックアップを保存してください。`,()=>runMutation(()=>changeState(db,revision,s=>{
+  confirmAction(practice?'練習の売上を確定':'当日の売上を確定',`${date} · ${yen(salesTotal(receipts))} · ${receipts.length}会計を確定します。\n新しい会計の追加を終了します。確定後も履歴から取消・訂正できます。修正は元の会計を残して記録します。\n確定後にCSVとバックアップを保存してください。`,()=>runMutation(()=>changeState(db,revision,s=>{
     if(draft.items.length||draft.received||draft.correctionOfId)throw new Error('途中の会計があるため、売上を確定できません。');
     return finalizeDay(s,date);
   }),'当日の売上を確定しました。CSVとバックアップを保存してください。'));

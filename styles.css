@@ -311,3 +311,43 @@ textarea{display:block;width:100%;resize:vertical;font:12px/1.5 ui-monospace,mon
   .sales-breakdown{border:0;border-top:1px solid var(--line);padding:16px 0 0}
   .sales-history{grid-column:auto}
 }
+
+/* 前日の参照は売上見出しにまとめ、会計エリアの配置を保つ。 */
+.sales-panel>.panel-heading{flex-wrap:wrap}
+.sales-heading-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-left:auto}
+.sales-heading-actions>span{font-size:.75rem}
+#open-previous-day{min-height:44px;padding:6px 12px;background:#ffffffed;color:#285b76;border-color:#ffffffb3;box-shadow:none;font-size:.8rem}
+#event-total{width:100%;margin-top:10px;border-color:var(--blue);background:#edf3f5;color:#285b76}
+.record-day-totals{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 24px}
+.record-day-totals>div{display:grid;gap:8px;min-width:0;padding:16px;background:#edf5ed;border:1px solid var(--line);border-radius:6px}
+.record-day-totals span,.record-day-totals small{font-size:.8rem;color:var(--muted)}
+.record-day-totals strong{font-size:1.5rem;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.event-running-summary{display:grid;gap:6px;margin:16px 0;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.event-running-summary>span{font-size:.8rem;font-weight:700;color:var(--blue)}
+.event-running-summary strong{font-size:1.6rem;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.event-running-summary small{font-size:.7rem;color:var(--muted);line-height:1.6}
+.scope-switch{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:14px 0}
+.scope-switch button{min-height:44px;padding:6px;font-size:.75rem;border-color:#bdc8c5;box-shadow:none}
+.scope-switch button[aria-pressed="true"]{background:#edf5ed;color:var(--green);border-color:var(--green)}
+.hour-day-legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:16px;font-size:.75rem}
+.hour-day-legend span{display:flex;align-items:center;gap:6px}
+.hour-day-legend i{width:10px;height:10px;border-radius:50%}
+.hour-days{grid-column:1/-1;grid-row:2;display:grid;gap:9px}
+.hour-day-line{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:.7rem}
+.hour-day-line .hour-track{grid-column:auto;grid-row:auto;height:9px}
+.hour-day-line strong{font-size:.75rem;white-space:nowrap}
+#previous-day-dialog{width:min(1120px,calc(100% - 28px));padding:24px}
+#previous-day-dialog>.dialog-heading{position:sticky;top:0;z-index:2;background:var(--paper);padding:8px 0;border-bottom:1px solid var(--line)}
+.record-date{margin:0 0 6px;color:var(--blue);font-weight:700}
+.record-status{margin:12px 0 24px;padding:10px 14px;border-radius:6px;background:#edf3f5;color:#38576b}
+.previous-day-body{padding:0}
+.previous-day-body .sales-history h3{margin-top:0}
+.previous-day-body .history{max-height:440px}
+.previous-day-body .today-total{overflow-wrap:anywhere}
+#previous-summaries h4{margin:14px 0;font-size:.85rem}
+@media(max-width:620px){
+  #previous-day-dialog{padding:18px}
+  .sales-heading-actions{gap:8px}
+  .previous-day-body .history{max-height:none;overflow:visible}
+  .record-day-totals{grid-template-columns:1fr}
+}

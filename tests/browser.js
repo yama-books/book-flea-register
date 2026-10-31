@@ -1,7 +1,7 @@
-import {openStore,readState,changeState,saveSale,restoreState,savePrediction} from '../src/storage.js';
-import {copy,voidSale,activeReceipts,parseBackup,backupJSON,addSale,initialState,finalizeDay,closedDay,localDate} from '../src/calculation.js';
+import {openStore,readState,changeState,saveSale,restoreState,savePrediction} from '../src/storage.js?v=20261031-amendments';
+import {copy,voidSale,activeReceipts,parseBackup,backupJSON,addSale,initialState,finalizeDay,closedDay,localDate} from '../src/calculation.js?v=20261031-amendments';
 import {addPrediction} from '../src/sales-forecast.js';
-import {openPractice} from '../src/practice.js';
+import {openPractice} from '../src/practice.js?v=20261031-amendments';
 const assert=(condition,message)=>{if(!condition)throw new Error(message);};
 const row={priceId:'p100',unitPriceYen:100,quantity:2,colorId:'red',colorLabel:'赤',colorHex:'#e85c63',genreId:null,genreLabel:'未分類',lineTotalYen:200};
 const sale=id=>({id,items:[copy(row)],receivedYen:1000});
@@ -49,20 +49,26 @@ document.querySelector('#run').onclick=async()=>{
         legacy=await new Promise((resolve,reject)=>{const request=indexedDB.open(legacyName,1);request.onupgradeneeded=()=>request.result.createObjectStore('register');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
         await new Promise((resolve,reject)=>{const tx=legacy.transaction('register','readwrite');tx.objectStore('register').put(initial,'state');tx.oncomplete=resolve;tx.onabort=reject;});
         legacy.onversionchange=()=>legacy.close();upgraded=await openStore(legacyName);
-        assert(upgraded.version===2,'DB更新');assert(JSON.stringify(await readState(upgraded))===JSON.stringify(initial),'全記録保持');
-        const rejected=await new Promise(resolve=>{const request=indexedDB.open(legacyName,1);request.onerror=()=>resolve(request.error.name==='VersionError');request.onsuccess=()=>{request.result.close();resolve(false);};});assert(rejected,'旧版の書込入口を止める');
+        assert(upgraded.version===3,'DB更新');assert(JSON.stringify(await readState(upgraded))===JSON.stringify(initial),'全記録保持');
+        const rejected=await new Promise(resolve=>{const request=indexedDB.open(legacyName,2);request.onerror=()=>resolve(request.error.name==='VersionError');request.onsuccess=()=>{request.result.close();resolve(false);};});assert(rejected,'旧版の書込入口を止める');
       }finally{legacy?.close();upgraded?.close();indexedDB.deleteDatabase(legacyName);}
     });
-    await check('確定と追加の競合を排他制御し、再接続後も追加・取消・古い復元を拒否',async()=>{
+    await check('確定と追加の競合を排他制御し、再接続後も新規追加と履歴消去を拒否し、確定後の訂正・取消を追記',async()=>{
       const before=await readState(db),date=localDate();
       const race=await Promise.allSettled([changeState(db,before.revision,s=>finalizeDay(s,date)),saveSale(db,before.revision,sale('close-race'))]);
       assert(race.filter(r=>r.status==='fulfilled').length===1,'同じrevisionの操作は片方だけ');
       let closed=await readState(db);if(!closedDay(closed,date))closed=await changeState(db,closed.revision,s=>finalizeDay(s,date));
       db.close();db=await openStore(name);closed=await readState(db);assert(Boolean(closedDay(closed,date)),'確定を永続化');const snapshot=JSON.stringify(closed);
-      for(const action of [()=>saveSale(db,closed.revision,sale('after-close')),()=>changeState(db,closed.revision,s=>voidSale(s,'replacement','取消')),()=>restoreState(db,closed.revision,before),()=>changeState(db,closed.revision,s=>{s.receipts.find(r=>r.businessDate===date).items[0].genreLabel='書換';return s;})]){
+      for(const action of [()=>saveSale(db,closed.revision,sale('after-close')),()=>restoreState(db,closed.revision,before),()=>changeState(db,closed.revision,s=>{s.receipts.find(r=>r.businessDate===date).items[0].genreLabel='書換';return s;})]){
         let rejected=false;try{await action();}catch{rejected=true;}assert(rejected,'確定後変更拒否');assert(JSON.stringify(await readState(db))===snapshot,'失敗後の記録不変');
       }
       const restored=await restoreState(db,closed.revision,parseBackup(backupJSON(closed)));assert(Boolean(closedDay(restored,date)),'同じ確定記録を含む復元は可能');
+      const original=activeReceipts(restored).find(r=>r.businessDate===date),baseline=JSON.stringify(closedDay(restored,date));
+      const amended=await saveSale(db,restored.revision,{...sale('after-close-correction'),correctionOfId:original.id});
+      assert(amended.receipts.find(r=>r.id==='after-close-correction').businessDate===date,'元の営業日を維持');
+      assert(JSON.stringify(closedDay(amended,date))===baseline,'確定時snapshot維持');
+      const cancelled=await changeState(db,amended.revision,s=>voidSale(s,'after-close-correction','確定後の取消'));
+      db.close();db=await openStore(name);assert((await readState(db)).voids.length===cancelled.voids.length,'修正を再接続後も保持');
     });
     await check('閉じたDBへの保存失敗を成功と扱わない',async()=>{const s=await readState(db);db.close();let rejected=false;try{await saveSale(db,s.revision,sale('closed-db'));}catch{rejected=true;}assert(rejected,'失敗通知');db=await openStore(name);assert(!(await readState(db)).receipts.some(r=>r.id==='closed-db'),'未保存');});
   }catch(e){failures++;document.querySelector('#status').textContent=e.message;}

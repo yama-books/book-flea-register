@@ -1,4 +1,8 @@
 import {activeReceipts,integer,localDate} from './calculation.js';
+export function previousBusinessDate(now=new Date()){
+  const previous=new Date(now);previous.setHours(12,0,0,0);previous.setDate(previous.getDate()-1);
+  return localDate(previous);
+}
 const palette=['#cf5361','#d7ac32','#398c71','#538ebd','#9463af','#d07b3d','#697782'];
 // 白い値札はグラフ内だけ色を分ける。値札の設定・履歴は変えない。
 const whiteMarkColors={white:'#8196a8',so:'#9b70b8',cd:'#d68b45'};
@@ -6,10 +10,13 @@ function chartColor(item,index){return whiteMarkColors[item.colorId]||(/^#[0-9a-
 // 履歴の確定時ラベルで分類する。現在の設定を引かず、取消は除く。
 export function salesSummary(state,date=localDate()){
   const categories=new Map(),hours=new Map();let totalYen=0;
-  for(const receipt of activeReceipts(state).filter(r=>r.businessDate===date)){
-    const hour=new Date(receipt.committedAt).getHours();
-    const period=hours.get(hour)||{hour,amountYen:0,quantity:0,receipts:0};
+  const dates=Array.isArray(date)?date:[date];
+  const emptyPeriod=hour=>({hour,amountYen:0,quantity:0,receipts:0,...(Array.isArray(date)?{days:dates.map(businessDate=>({businessDate,amountYen:0,quantity:0,receipts:0}))}:{})});
+  for(const receipt of activeReceipts(state).filter(r=>dates.includes(r.businessDate))){
+    const hour=new Date(receipt.saleOccurredAt??receipt.committedAt).getHours();
+    const period=hours.get(hour)||emptyPeriod(hour);
     period.amountYen=integer(period.amountYen+receipt.totalYen,0,Number.MAX_SAFE_INTEGER);period.quantity+=receipt.quantityTotal;period.receipts++;hours.set(hour,period);
+    if(period.days){const day=period.days.find(d=>d.businessDate===receipt.businessDate);day.amountYen=integer(day.amountYen+receipt.totalYen,0,Number.MAX_SAFE_INTEGER);day.quantity+=receipt.quantityTotal;day.receipts++;}
     for(const item of receipt.items){
       const name=item.genreLabel?.trim()||'未分類';
       const group=categories.get(name)||{name,amountYen:0,quantity:0,color:chartColor(item,categories.size)};
@@ -19,7 +26,7 @@ export function salesSummary(state,date=localDate()){
   }
   const groups=[...categories.values()].sort((a,b)=>b.amountYen-a.amountYen||a.name.localeCompare(b.name,'ja'));
   const periods=[];
-  if(hours.size)for(let hour=Math.min(...hours.keys());hour<=Math.max(...hours.keys());hour++)periods.push(hours.get(hour)||{hour,amountYen:0,quantity:0,receipts:0});
+  if(hours.size)for(let hour=Math.min(...hours.keys());hour<=Math.max(...hours.keys());hour++)periods.push(hours.get(hour)||emptyPeriod(hour));
   return {categories:groups,hours:periods,totalYen};
 }
 export function pieGradient(groups){
